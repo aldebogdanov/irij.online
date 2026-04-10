@@ -1,4 +1,4 @@
-;; server.irj — Dynamic Irij website (Vrata framework)
+;; server.irj — Irij website (Vrata framework)
 ;; Run: irij server.irj
 ;; Visit: http://localhost:8080
 
@@ -60,7 +60,32 @@ fn css
     (rule ".st" "font-size:.85rem;padding:.15rem .5rem;border-radius:.25rem;text-align:center")
     (rule ".done" "background:#dcfce7;color:#166534")
     (rule ".planned" "background:#fef3c7;color:#92400e")
-    (media "max-width:700px" #[(rule ".two-col,.grid" "grid-template-columns:1fr") (rule ".hero h2" "font-size:2rem")])
+    (rule ".pg-wrap" "display:flex;flex-direction:column;gap:0")
+    (rule ".pg-toolbar" "display:flex;align-items:center;justify-content:space-between;padding:.75rem 0;gap:.5rem")
+    (rule ".pg-toolbar select" "font-family:inherit;font-size:.85rem;padding:.4rem .75rem;border:1px solid var(--border);border-radius:.375rem;background:var(--card-bg);color:var(--fg);cursor:pointer")
+    (rule ".pg-btn" "font-family:inherit;font-size:.85rem;padding:.4rem 1.25rem;border:1px solid var(--border);border-radius:.375rem;cursor:pointer;background:var(--card-bg);color:var(--fg);transition:all .15s")
+    (rule ".pg-btn:hover" "background:var(--border)")
+    (rule ".pg-btn.run" "background:var(--accent);color:#fff;border-color:var(--accent);font-weight:600")
+    (rule ".pg-btn.run:hover" "opacity:.9")
+    (rule ".pg-editor" "border:1px solid var(--border);border-radius:.5rem .5rem 0 0;overflow:hidden;min-height:280px")
+    (rule ".pg-editor .CodeMirror" "font-family:JetBrains Mono,Fira Code,monospace;font-size:.88rem;line-height:1.6;height:280px;background:var(--code-bg)")
+    (rule ".pg-editor .CodeMirror-gutters" "background:var(--code-bg);border-right:1px solid var(--border)")
+    (rule ".pg-editor .CodeMirror-linenumber" "color:var(--muted)")
+    (rule ".pg-editor .CodeMirror-cursor" "border-left-color:var(--accent)")
+    (rule ".pg-editor .CodeMirror-selected" "background:rgba(230,126,34,.12) !important")
+    (rule ".pg-output-hdr" "display:flex;align-items:center;justify-content:space-between;padding:.4rem .75rem;background:var(--card-bg);border:1px solid var(--border);border-top:none;font-size:.75rem;color:var(--muted);text-transform:uppercase;letter-spacing:.5px")
+    (rule ".pg-output" "border:1px solid var(--border);border-top:none;border-radius:0 0 .5rem .5rem;padding:.75rem 1rem;min-height:100px;max-height:200px;overflow-y:auto;font-family:JetBrains Mono,Fira Code,monospace;font-size:.88rem;line-height:1.6;white-space:pre-wrap;word-break:break-word;background:var(--code-bg)")
+    (rule ".pg-output .val" "color:#16a34a")
+    (rule ".pg-output .out" "color:var(--muted)")
+    (rule ".pg-output .err" "color:#dc2626")
+    (rule ".pg-output .info" "color:var(--muted);font-style:italic")
+    (rule ".pg-status" "display:flex;align-items:center;gap:.5rem;padding:.4rem 0;font-size:.78rem;color:var(--muted)")
+    (rule ".pg-dot" "width:6px;height:6px;border-radius:50%;background:#16a34a")
+    (rule ".pg-dot.running" "background:var(--accent)")
+    (rule ".pg-dot.error" "background:#dc2626")
+    (rule ".ghost-result" "color:#007777;font-style:italic;font-family:JetBrains Mono,Fira Code,monospace;font-size:.85rem;padding:2px 0;display:inline-block")
+    (rule ".ghost-error" "color:#c0392b;font-style:italic;font-family:JetBrains Mono,Fira Code,monospace;font-size:.85rem;padding:2px 0;display:inline-block")
+    (media "max-width:700px" #[(rule ".two-col,.grid" "grid-template-columns:1fr") (rule ".hero h2" "font-size:2rem") (rule ".pg-editor .CodeMirror" "height:200px")])
   ])
 
 ;; ═══════════════════════════════════════════════════════════════════
@@ -87,7 +112,7 @@ fn nav-link-el
   (href label active -> a {href= href class= (if (href == active) "active" else "")} #[label])
 
 fn make-nav
-  (active -> nav {} #[(nav-link-el "/" "Home" active) (nav-link-el "/features" "Features" active) (nav-link-el "/examples" "Examples" active) (nav-link-el "/roadmap" "Roadmap" active)])
+  (active -> nav {} #[(nav-link-el "/" "Home" active) (nav-link-el "/playground" "Playground" active)])
 
 fn head-extras
   (-> #[(link-tag {rel= "icon" type= "image/png" href= "/Irij-favicon.png"}) (link-tag {rel= "stylesheet" href= "https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=JetBrains+Mono:wght@400&family=Roboto+Slab:wght@700&display=swap"})])
@@ -96,60 +121,21 @@ fn layout
   (ttl active body-children -> page (ttl ++ " — Irij") (css ()) (head-extras ()) #[(div (cls "container") #[(header {} #[(div (cls "inner") #[(a {class= "logo" href= "/"} #[(img {src= "/Irij.png" alt= "Irij" class= "logo-img"})]) (make-nav active)])]) (main {} body-children) (footer {} #["Irij v0.2.0 — Where contracts meet effects"])])])
 
 ;; ═══════════════════════════════════════════════════════════════════
-;; Home page
+;; Home page (combined: hero + features + examples + roadmap)
 ;; ═══════════════════════════════════════════════════════════════════
 
 fn home-hero
   (-> div (cls "hero") #[(h2 {} #[(raw "Where <em>contracts</em> meet <em>effects</em>")]) (p (cls "sub") #["A JVM language with algebraic effects, runtime specs, and property-based contracts"]) (div (cls "badges") #[(badge "v0.2.0" "badge primary") (badge "JVM" "badge") (badge "Virtual Threads" "badge") (badge "ANTLR4" "badge")])])
 
-fn home-code
-  (-> code-lines #[
-    "<span class=\"c\">;; Specs define data shape + validate at construction</span>"
-    "<span class=\"k\">spec</span> <span class=\"t\">Person</span>"
-    "  name <span class=\"k\">::</span> <span class=\"t\">Str</span>"
-    "  age  <span class=\"k\">::</span> (<span class=\"t\">Int</span> <span class=\"k\">:min</span> <span class=\"n\">0</span> <span class=\"k\">:max</span> <span class=\"n\">150</span>)"
-    ""
-    "<span class=\"c\">;; :: for data flow (specs)</span>"
-    "<span class=\"k\">fn</span> greet <span class=\"k\">::</span> <span class=\"t\">Person</span> <span class=\"t\">Str</span>"
-    "  (p <span class=\"op\">-></span> <span class=\"s\">\"Hello, \"</span> <span class=\"op\">++</span> p.name)"
-  ])
+;; ── Feature cards ────────────────────────────────────────────────
 
-fn home-cards
-  (-> div {class= "grid" style= "margin-top:2rem"} #[(card "Algebraic Effects" "First-class effect system with deep handlers. Mock any side effect in tests.") (card "Runtime Specs" "Malli-inspired specs replace types. Certify values at construction, validate at boundaries.") (card "Contracts & Laws" "Pre/post conditions with blame tracking. QuickCheck-style property verification.")])
+fn home-features
+  (-> div (cls "grid") #[(card "Algebraic Effects" "First-class effect system with deep handlers. Mock any side effect in tests.") (card "Runtime Specs" "Malli-inspired specs replace types. Certify values at construction, validate at boundaries.") (card "Contracts & Laws" "Pre/post conditions with blame tracking. QuickCheck-style property verification.") (card "Structured Concurrency" "scope/fork/await, par, race, timeout. Java virtual threads with auto-cancellation.") (card "Pipeline Operators" "|> pipeline, @ map, /? filter, /+ fold. >> composition, ~ apply-to-rest.") (card "Module System & Packages" "use mod.name :open. Git deps via deps.irj. Pub/private exports. Effect-gated APIs.")])
 
-fn home-page
-  (req -> html ~ layout "Home" "/" #[(home-hero ()) (home-code ()) (home-cards ())])
+;; ── Code examples ────────────────────────────────────────────────
 
-;; ═══════════════════════════════════════════════════════════════════
-;; Features page
-;; ═══════════════════════════════════════════════════════════════════
-
-fn features-page
-  (req ->
-    html ~ layout "Features" "/features" #[
-      (h2 {} #["Language Features"])
-      (div (cls "grid") #[
-        (card "Algebraic Effects & Handlers" "Define effects as interfaces, implement them as handlers. Resume continuations, abort computations, compose handlers with >>. Deep, one-shot handlers on virtual threads.")
-        (card "Runtime Specs (Malli-style)" "spec Person; name :: Str; age :: Int. Defines shape, constructors, pattern matching, validation, Arbitrary generation. Certified values pass boundary checks in O(1).")
-        (card "Effect Row Declarations" "fn save :: Data () ::: Db Console. Declare data flow (::) and effect flow (:::) separately. Unannotated fn = pure. Enforced at runtime.")
-        (card "Pre/Post/In/Out Contracts" "Function-level pre/post conditions plus module-boundary in/out contracts with blame tracking. Deferred on partial application.")
-        (card "QuickCheck-style Laws" "law commutativity = forall x y. add x y == add y x. Property-based random testing with verify-laws.")
-        (card "Structured Concurrency" "scope/fork/await, par combinator, race, timeout. Java virtual threads with automatic cancellation and error propagation.")
-        (card "Pattern Matching" "Match on tagged values, destructure collections, use guards. Three fn body forms: lambda, match arms, imperative.")
-        (card "Persistent Data Structures" "Immutable vectors #[...], sets #{...}, tuples #(...), maps {k= v}. Mutable bindings opt-in via :! with <- assignment.")
-        (card "Pipeline & Seq Operators" "|> pipeline, @ map, /? filter, /+ fold, /! find. >> composition, ~ apply-to-rest.")
-        (card "Module System & Packages" "use mod.name :open, selective {fn1 fn2}. Package management via deps.irj with git deps and local paths.")
-        (card "Protocol Dispatch" "proto Show a; show :: a -> Str. Single-dispatch protocols with impl blocks. Law verification across implementations.")
-        (card "I/O Effects" "std.fs (FileIO), std.http (Http), std.serve (Serve). All mockable via custom handlers. JSON builtins built-in.")
-      ])
-    ])
-
-;; ═══════════════════════════════════════════════════════════════════
-;; Examples page
-;; ═══════════════════════════════════════════════════════════════════
-
-fn ex-pattern-matching
-  (-> div {} #[(h3 {} #["Pattern Matching"]) (code-lines #[
+fn ex-specs-and-matching
+  (-> div {} #[(h3 {} #["Specs & Pattern Matching"]) (code-lines #[
     "<span class=\"k\">spec</span> <span class=\"t\">Shape</span>"
     "  <span class=\"t\">Circle</span> <span class=\"t\">Float</span>"
     "  <span class=\"t\">Rect</span> <span class=\"t\">Float</span> <span class=\"t\">Float</span>"
@@ -157,10 +143,13 @@ fn ex-pattern-matching
     "<span class=\"k\">fn</span> area <span class=\"k\">::</span> <span class=\"t\">Shape</span> <span class=\"t\">Float</span>"
     "  <span class=\"t\">Circle</span> r   <span class=\"op\">=></span> <span class=\"n\">3.14159</span> * r * r"
     "  <span class=\"t\">Rect</span> w h   <span class=\"op\">=></span> w * h"
+    ""
+    "println (area (Circle <span class=\"n\">5.0</span>))"
+    "<span class=\"c\">;; 78.53975</span>"
   ])])
 
 fn ex-effects
-  (-> div {} #[(h3 {} #["Effects & Handlers"]) (code-lines #[
+  (-> div {} #[(h3 {} #["Algebraic Effects"]) (code-lines #[
     "<span class=\"k\">effect</span> <span class=\"t\">Logger</span>"
     "  log <span class=\"k\">::</span> <span class=\"t\">Str</span> <span class=\"op\">-></span> ()"
     ""
@@ -171,18 +160,35 @@ fn ex-effects
     ""
     "<span class=\"k\">with</span> console"
     "  log <span class=\"s\">\"Starting...\"</span>"
+    "  log <span class=\"s\">\"Done!\"</span>"
   ])])
 
 fn ex-pipelines
-  (-> div {} #[(h3 {} #["Pipelines"]) (code-lines #[
-    "data := #[<span class=\"n\">1 2 3 4 5 6 7 8 9 10</span>]"
+  (-> div {} #[(h3 {} #["Pipelines & Seq Ops"]) (code-lines #[
+    "nums := #[<span class=\"n\">1 2 3 4 5 6 7 8 9 10</span>]"
     ""
-    "result := data"
-    "  <span class=\"op\">|></span> /? (x <span class=\"op\">-></span> x > <span class=\"n\">3</span>)"
-    "  <span class=\"op\">|></span> @ (x <span class=\"op\">-></span> x * x)"
-    "  <span class=\"op\">|></span> /+ <span class=\"n\">0</span>"
+    "result := nums"
+    "  <span class=\"op\">|></span> /? (n <span class=\"op\">-></span> n > <span class=\"n\">3</span>)"
+    "  <span class=\"op\">|></span> @ (n <span class=\"op\">-></span> n * n)"
+    "  <span class=\"op\">|></span> /+"
     ""
-    "<span class=\"c\">;; result = 355</span>"
+    "println result"
+    "<span class=\"c\">;; 355</span>"
+  ])])
+
+fn ex-contracts
+  (-> div {} #[(h3 {} #["Contracts & Laws"]) (code-lines #[
+    "<span class=\"k\">fn</span> withdraw"
+    "  <span class=\"k\">pre</span>  (account amt <span class=\"op\">-></span> amt > <span class=\"n\">0</span>)"
+    "  <span class=\"k\">post</span> (result <span class=\"op\">-></span> result.balance >= <span class=\"n\">0</span>)"
+    "  (account amt <span class=\"op\">-></span>"
+    "    {<span class=\"op\">...</span>account balance<span class=\"op\">=</span> account.balance - amt})"
+    ""
+    "<span class=\"k\">proto</span> <span class=\"t\">Monoid</span> a"
+    "  empty <span class=\"k\">::</span> a"
+    "  append <span class=\"k\">::</span> a <span class=\"op\">-></span> a <span class=\"op\">-></span> a"
+    "  <span class=\"k\">law</span> identity <span class=\"op\">=</span> <span class=\"k\">forall</span> x<span class=\"op\">.</span>"
+    "    append empty x <span class=\"op\">==</span> x"
   ])])
 
 fn ex-concurrency
@@ -192,75 +198,159 @@ fn ex-concurrency
     "  b := s.fork (<span class=\"op\">-></span> fetch <span class=\"s\">\"posts\"</span>)"
     "  merge (await a) (await b)"
     ""
-    "<span class=\"c\">;; First error cancels all siblings</span>"
-    "<span class=\"c\">;; Scope waits for all fibers</span>"
+    "<span class=\"c\">;; Composable combinators</span>"
+    "sum := par (+) (<span class=\"op\">-></span> slow-calc <span class=\"n\">1</span>) (<span class=\"op\">-></span> slow-calc <span class=\"n\">2</span>)"
+    "winner := race (<span class=\"op\">-></span> slow) (<span class=\"op\">-></span> fast)"
+    "ok := timeout <span class=\"n\">1000</span> (<span class=\"op\">-></span> work)"
   ])])
 
-fn ex-fn-bodies
-  (-> div {} #[(h3 {} #["Three Function Body Forms"]) (code-lines #[
-    "<span class=\"c\">;; 1. Lambda body</span>"
-    "<span class=\"k\">fn</span> add (x y <span class=\"op\">-></span> x + y)"
-    ""
-    "<span class=\"c\">;; 2. Match arms</span>"
-    "<span class=\"k\">fn</span> fib"
-    "  <span class=\"n\">0</span> <span class=\"op\">=></span> <span class=\"n\">0</span>"
-    "  <span class=\"n\">1</span> <span class=\"op\">=></span> <span class=\"n\">1</span>"
-    "  n <span class=\"op\">=></span> fib (n-<span class=\"n\">1</span>) + fib (n-<span class=\"n\">2</span>)"
-    ""
-    "<span class=\"c\">;; 3. Imperative body</span>"
+fn ex-imperative
+  (-> div {} #[(h3 {} #["Imperative Functions"]) (code-lines #[
     "<span class=\"k\">fn</span> greet <span class=\"k\">:::</span> <span class=\"t\">Console</span>"
-    "  name <span class=\"op\">=></span>"
-    "  msg := <span class=\"s\">\"Hello, \"</span> ++ name"
+    "  <span class=\"op\">=></span> name"
+    "  msg := <span class=\"s\">\"Hello, \"</span> <span class=\"op\">++</span> name"
     "  println msg"
     "  msg"
+    ""
+    "<span class=\"c\">;; Three fn body styles:</span>"
+    "<span class=\"k\">fn</span> add (x y <span class=\"op\">-></span> x + y)          <span class=\"c\">;; lambda</span>"
+    "<span class=\"k\">fn</span> fib"
+    "  <span class=\"n\">0</span> <span class=\"op\">=></span> <span class=\"n\">1</span>                        <span class=\"c\">;; match arms</span>"
+    "  n <span class=\"op\">=></span> n * fib (n - <span class=\"n\">1</span>)"
   ])])
 
 fn ex-collections
-  (-> div {} #[(h3 {} #["Collections & Modules"]) (code-lines #[
-    "x := <span class=\"n\">42</span>              <span class=\"c\">;; immutable</span>"
-    "counter :! <span class=\"n\">0</span>         <span class=\"c\">;; mutable</span>"
-    "counter <span class=\"op\"><-</span> counter + <span class=\"n\">1</span>"
-    ""
+  (-> div {} #[(h3 {} #["Collections & Records"]) (code-lines #[
     "vec := #[<span class=\"n\">1 2 3</span>]"
     "set := #{<span class=\"k\">:a :b :c</span>}"
-    "map := {name<span class=\"op\">=</span> <span class=\"s\">\"Alice\"</span>}"
+    "tup := #(<span class=\"n\">42</span> <span class=\"s\">\"hello\"</span>)"
+    "person := {name<span class=\"op\">=</span> <span class=\"s\">\"Alice\"</span> age<span class=\"op\">=</span> <span class=\"n\">30</span>}"
     ""
-    "<span class=\"k\">use</span> std.math <span class=\"k\">:open</span>"
-    "<span class=\"k\">use</span> std.http {get post}"
+    "<span class=\"c\">;; Immutable update</span>"
+    "older := {<span class=\"op\">...</span>person age<span class=\"op\">=</span> <span class=\"n\">31</span>}"
+    ""
+    "<span class=\"c\">;; Mutable opt-in</span>"
+    "counter :! <span class=\"n\">0</span>"
+    "counter <span class=\"op\"><-</span> counter + <span class=\"n\">1</span>"
   ])])
 
-fn typing-table
-  (-> table {} #[(el "thead" {} #[(tr {} #[(th {} #["Tier"]) (th {} #["Mechanism"]) (th {} #["Enforcement"])])]) (el "tbody" {} #[(tr {} #[(td {} #["Library API"]) (td {} #["Spec annotations (::)"]) (td {} #["Lint warning"])]) (tr {} #[(td {} #["Effects"]) (td {} #["Effect rows (:::)"]) (td {} #["Runtime"])]) (tr {} #[(td {} #["Data shapes"]) (td {} #["spec declarations"]) (td {} #["Construction + boundaries"])]) (tr {} #[(td {} #["Behavior"]) (td {} #["Contracts + Laws"]) (td {} #["Pre/post + QuickCheck"])]) (tr {} #[(td {} #["App code"]) (td {} #["Optional"]) (td {} #["Nothing mandatory"])])])])
+fn ex-protocols
+  (-> div {} #[(h3 {} #["Protocols"]) (code-lines #[
+    "<span class=\"k\">proto</span> <span class=\"t\">Show</span> a"
+    "  show <span class=\"k\">::</span> a <span class=\"op\">-></span> <span class=\"t\">Str</span>"
+    ""
+    "<span class=\"k\">impl</span> <span class=\"t\">Show</span> <span class=\"k\">for</span> <span class=\"t\">Int</span>"
+    "  show := (n <span class=\"op\">-></span> to-str n)"
+    ""
+    "<span class=\"k\">impl</span> <span class=\"t\">Show</span> <span class=\"k\">for</span> <span class=\"t\">Vector</span>"
+    "  show := (v <span class=\"op\">-></span> <span class=\"s\">\"[\"</span> <span class=\"op\">++</span> (join <span class=\"s\">\", \"</span> (@ to-str v)) <span class=\"op\">++</span> <span class=\"s\">\"]\"</span>)"
+    ""
+    "println (show <span class=\"n\">42</span>)"
+    "println (show #[<span class=\"n\">1 2 3</span>])"
+  ])])
 
-fn examples-page
-  (req ->
-    html ~ layout "Examples" "/examples" #[
-      (h2 {} #["Code Examples"])
-      (div (cls "two-col") #[(ex-pattern-matching ()) (ex-effects ())])
-      (div {class= "two-col" style= "margin-top:2rem"} #[(ex-pipelines ()) (ex-concurrency ())])
-      (div (cls "section-sep") #[])
-      (h2 {} #["Quick Reference"])
-      (div (cls "two-col") #[(ex-fn-bodies ()) (ex-collections ())])
-      (div (cls "section-sep") #[])
-      (h2 {} #["Typing Philosophy"])
-      (p {} #["Irij uses tiered runtime verification instead of HM type inference:"])
-      (typing-table ())
-    ])
-
-;; ═══════════════════════════════════════════════════════════════════
-;; Roadmap page
-;; ═══════════════════════════════════════════════════════════════════
+;; ── Roadmap ──────────────────────────────────────────────────────
 
 fn phase-row
   (status label desc -> #[(span {class= "st " ++ status} #[(if (status == "done") "done" else "next")]) (span {} #[(strong {} #[label]) (raw (" " ++ desc))])])
 
-fn roadmap-page
+fn home-roadmap
+  (-> div (cls "phase") (phase-row "done" "Phase 0-2" "Parser, AST, Interpreter, REPL, CLI" ++ phase-row "done" "Phase 3" "Algebraic effects with deep handlers" ++ phase-row "done" "Phase 4" "Module system + standard library" ++ phase-row "done" "Phase 5" "Structured concurrency (virtual threads)" ++ phase-row "done" "Phase 6" "Contracts, blame tracking, QuickCheck laws" ++ phase-row "done" "Phase 7" "Effect row declarations + enforcement" ++ phase-row "done" "Phase 8" "Runtime specs, validation, Arbitrary, lint" ++ phase-row "done" "Phase 9" "Package management (deps.irj, git deps)" ++ phase-row "done" "Phase 10" "I/O: JSON, FileIO, HTTP client + server" ++ phase-row "done" "Phase 11" "Database effect (SQLite, std.db)" ++ phase-row "done" "Phase 12b" "nREPL Playground (browser sandbox)" ++ phase-row "planned" "Phase 12a" "Package Registry (app in Irij)" ++ phase-row "planned" "Future" "JVM interop, Channels, LSP, GraalVM native"))
+
+;; ── Full home page ───────────────────────────────────────────────
+
+fn home-page
   (req ->
-    html ~ layout "Roadmap" "/roadmap" #[
+    html ~ layout "Home" "/" #[
+      (home-hero ())
+      (home-features ())
+      (div (cls "section-sep") #[])
+      (h2 {} #["Code Examples"])
+      (div (cls "two-col") #[(ex-specs-and-matching ()) (ex-effects ())])
+      (div {class= "two-col" style= "margin-top:2rem"} #[(ex-pipelines ()) (ex-contracts ())])
+      (div {class= "two-col" style= "margin-top:2rem"} #[(ex-concurrency ()) (ex-imperative ())])
+      (div {class= "two-col" style= "margin-top:2rem"} #[(ex-collections ()) (ex-protocols ())])
+      (div (cls "section-sep") #[])
       (h2 {} #["Roadmap"])
       (p {} #["Irij is in active development. Current status:"])
-      (div (cls "phase") (phase-row "done" "Phase 0-2" "Parser, AST, Interpreter, REPL, CLI" ++ phase-row "done" "Phase 3" "Algebraic effects with deep handlers" ++ phase-row "done" "Phase 4" "Module system + standard library" ++ phase-row "done" "Phase 5" "Structured concurrency (virtual threads)" ++ phase-row "done" "Phase 6" "Contracts, blame tracking, QuickCheck laws" ++ phase-row "done" "Phase 7" "Effect row declarations + enforcement" ++ phase-row "done" "Phase 8" "Runtime specs, validation, Arbitrary, lint" ++ phase-row "done" "Phase 9" "Package management (deps.irj, git deps)" ++ phase-row "done" "Phase 10" "I/O: JSON, FileIO, HTTP client + server" ++ phase-row "planned" "Phase 11" "Database effect (::: Db)" ++ phase-row "planned" "Phase 12a" "Irij Package Registry (app in Irij)" ++ phase-row "planned" "Phase 12b" "nREPL Playground (browser sandbox)" ++ phase-row "planned" "Future" "Channels, LSP, GraalVM native image"))
+      (home-roadmap ())
     ])
+
+;; ═══════════════════════════════════════════════════════════════════
+;; Playground page
+;; ═══════════════════════════════════════════════════════════════════
+
+fn pg-head-extras
+  (-> #[
+    (link-tag {rel= "stylesheet" href= "https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.css"})
+    (el "script" {src= "https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.js"} #[])
+    (el "script" {src= "/playground.js" defer= "defer"} #[])
+  ])
+
+fn pg-toolbar
+  (-> div (cls "pg-toolbar") #[(div {style= "display:flex;align-items:center;gap:.5rem"} #[(el "select" {id= "pg-examples"} #[(el "option" {value= ""} #["Load example..."])]) (el "button" {class= "pg-btn run" onclick= "runCode()"} #["Run"]) (el "button" {class= "pg-btn" onclick= "clearOutput()"} #["Clear"]) (el "button" {id= "pg-reset" class= "pg-btn" onclick= "resetSession()"} #["Reset"])]) (div {style= "display:flex;gap:.5rem"} #[(el "button" {class= "pg-btn" onclick= "shareCode()"} #["Share"])])])
+
+fn pg-editor-el
+  (-> div (cls "pg-editor") #[(el "textarea" {id= "pg-code"} #["println \"Hello, Irij!\""])])
+
+fn pg-output-el
+  (-> #[(div (cls "pg-output-hdr") #[(span {} #["Output"]) (div (cls "pg-status") #[(span {id= "pg-dot" class= "pg-dot"} #[]) (span {id= "pg-status-text"} #["Ready"])])]) (div {id= "pg-out" class= "pg-output"} #[(span (cls "info") #["Press Ctrl+Enter or click Run to evaluate."])])])
+
+fn pg-children
+  (-> #[(pg-toolbar ()) (pg-editor-el ())] ++ (pg-output-el ()))
+
+fn playground-body
+  (-> div (cls "pg-wrap") (pg-children ()))
+
+fn playground-page
+  (req -> page ("Playground — Irij") (css ()) ((head-extras ()) ++ (pg-head-extras ())) #[(div (cls "container") #[(header {} #[(div (cls "inner") #[(a {class= "logo" href= "/"} #[(img {src= "/Irij.png" alt= "Irij" class= "logo-img"})]) (make-nav "/playground")])]) (main {} #[(h2 {} #["Playground"]) (p (cls "sub") #["Write Irij code in the browser. Alt+Enter: eval form at cursor. Ctrl+Enter: eval all."]) (playground-body ())]) (footer {} #["Irij v0.2.0 — Where contracts meet effects"])])])
+
+;; ═══════════════════════════════════════════════════════════════════
+;; Session API + examples
+;; ═══════════════════════════════════════════════════════════════════
+
+;; POST /api/session — create a new persistent sandbox session
+fn handle-session-create
+  (_ -> json-response (json-encode ({id= (raw-session-create ())})))
+
+;; POST /api/session/eval — eval code in a persistent session
+fn handle-session-eval-helper
+  => request
+  data := json-parse request.body
+  id := get "id" data
+  code := get "code" data
+  t0 := time-ms ()
+  result := raw-session-eval id code 10000
+  elapsed := (time-ms ()) - t0
+  json-response (json-encode ({value= (get "value" result) stdout= (get "stdout" result) error= (get "error" result) ok= (get "ok" result) elapsed= elapsed}))
+
+fn handle-session-eval
+  (request -> handle-session-eval-helper request)
+
+;; POST /api/session/destroy — destroy a session
+fn handle-session-destroy
+  => request
+  data := json-parse request.body
+  raw-session-destroy (get "id" data)
+  json-response (json-encode ({ok= true}))
+
+;; Keep old /eval endpoint for backwards compat
+fn handle-eval
+  (request -> json-response (json-encode (raw-nrepl-eval-sandboxed (get "code" (json-parse request.body)) 10000)))
+
+pg-examples := #[
+  {title= "Hello World" code= "println \"Hello, Irij!\""}
+  {title= "Fibonacci" code= "fn fib\n  0 => 1\n  1 => 1\n  n => fib (n - 1) + fib (n - 2)\n\nprintln (fib 10)"}
+  {title= "Pattern Matching" code= "fn describe\n  0 => \"zero\"\n  n | (n < 0) => \"negative\"\n  _ => \"positive\"\n\nprintln (describe 0)\nprintln (describe 42)\nprintln (describe -7)"}
+  {title= "Collections" code= "xs := #[1 2 3 4 5]\nprintln (map (x -> x * x) xs)\nprintln (filter (x -> x > 10) (map (x -> x * x) xs))\nprintln (fold + 0 xs)"}
+  {title= "Algebraic Effects" code= "effect Greet\n  greet :: Str -> Str\n\nhandler polite :: Greet\n  greet name => resume (\"Hello, \" ++ name ++ \"!\")\n\nhandler casual :: Greet\n  greet name => resume (\"Hey \" ++ name)\n\nfn welcome ::: Greet Console\n  (name -> println (greet name))\n\nwith polite\n  welcome \"Alice\"\n\nwith casual\n  welcome \"Bob\""}
+  {title= "Specs" code= "spec Color\n  Red\n  Green\n  Blue\n\nfn to-hex :: Color Str\n  Red => \"#ff0000\"\n  Green => \"#00ff00\"\n  Blue => \"#0000ff\"\n\nprintln (to-hex Red)\nprintln (to-hex Blue)"}
+  {title= "Pipelines" code= "result := #[1 2 3 4 5 6 7 8 9 10]\n  |> /? (n -> n > 3)\n  |> @ (n -> n * n)\n  |> /+\n\nprintln result"}
+  {title= "Contracts" code= "fn double-positive\n  pre (n -> n > 0)\n  (n -> n * 2)\n\nprintln (double-positive 5)\n\nr := try (-> double-positive -1)\nmatch r\n  Ok v => println v\n  Err msg => println msg"}
+]
+
+fn handle-examples
+  (_ -> json-response (json-encode pg-examples))
 
 ;; ═══════════════════════════════════════════════════════════════════
 ;; Router
@@ -268,9 +358,12 @@ fn roadmap-page
 
 routes := #[
   (route "GET" "/" home-page)
-  (route "GET" "/features" features-page)
-  (route "GET" "/examples" examples-page)
-  (route "GET" "/roadmap" roadmap-page)
+  (route "GET" "/playground" playground-page)
+  (route "POST" "/eval" handle-eval)
+  (route "POST" "/api/session" handle-session-create)
+  (route "POST" "/api/session/eval" handle-session-eval)
+  (route "POST" "/api/session/destroy" handle-session-destroy)
+  (route "GET" "/api/examples" handle-examples)
 ]
 
 with default-serve
