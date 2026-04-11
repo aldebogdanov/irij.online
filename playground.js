@@ -9,6 +9,7 @@
   var editor = null;
   var sessionId = null;
   var ghostWidget = null;
+  var ghostEl = null;
 
   // ── Session lifecycle ─────────────────────────────────────────────
 
@@ -124,19 +125,30 @@
       ghostWidget.clear();
       ghostWidget = null;
     }
+    if (ghostEl && ghostEl.parentNode) {
+      ghostEl.parentNode.removeChild(ghostEl);
+      ghostEl = null;
+    }
   }
 
   function showGhost(line, text, isError) {
     clearGhost();
     if (!editor) return;
 
+    var lineContent = editor.getLine(line);
+    var ch = lineContent.length;
+
     var el = document.createElement('span');
     el.className = isError ? 'ghost-error' : 'ghost-result';
     var display = text.length > 80 ? text.substring(0, 79) + '…' : text;
     el.textContent = '  ;; => ' + display;
+    el.style.pointerEvents = 'none';
+    el.style.whiteSpace = 'nowrap';
+    ghostEl = el;
 
-    ghostWidget = editor.addLineWidget(line, el, {
-      above: false, noHScroll: true
+    // Use bookmark at end of line to anchor the ghost inline
+    ghostWidget = editor.setBookmark({line: line, ch: ch}, {
+      widget: el, insertLeft: true
     });
 
     // Dismiss on next edit (like irij-nrepl pre-command-hook)
