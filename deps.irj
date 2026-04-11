@@ -1,2 +1,3 @@
 dep vrata
-  path "/Users/laniakea/dev/vrata"
+  git "https://github.com/aldebogdanov/vrata.git"
+  tag "v0.1.0"
