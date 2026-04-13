@@ -24,10 +24,8 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Clone vrata dependency
-        run: |
-          mkdir -p ~/.irij/deps/vrata/v0.1.0
-          git clone --branch v0.1.0 --depth 1 https://github.com/aldebogdanov/vrata.git ~/.irij/deps/vrata/v0.1.0
+      - name: Install seeds
+        run: java -jar irij.jar install
 
       - name: Start server and verify
         run: |
