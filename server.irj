@@ -7,15 +7,21 @@ use vrata.css :open
 use vrata.page :open
 use std.serve :open
 use std.db :open
+use std.datastar :open
+
+irij-version := "v0.2.6"
 
 ;; ═══════════════════════════════════════════════════════════════════
 ;; Seed Registry — Database
 ;; ═══════════════════════════════════════════════════════════════════
 
+;; Working dir
+workdir := env "IRIJ_ONLINE_WORKDIR" "/var/lib/irij.online"
+
 ;; Storage paths
-seeds-db-dir := "/var/lib/irij.online/seeds-db"
+seeds-db-dir := workdir ++ "/seeds-db"
 seeds-db-path := seeds-db-dir ++ "/registry.db"
-seeds-storage-dir := "/var/lib/irij.online/seeds"
+seeds-storage-dir := workdir ++ "/seeds"
 
 ;; Ensure data dirs exist
 fn init-registry-dirs ::: Console
@@ -183,18 +189,27 @@ fn github-icon
 fn make-nav
   (active -> nav {} #[(nav-link-el "/" "Home" active) (nav-link-el "/seeds" "Seeds" active) (nav-link-el "/playground" "Playground" active) (github-icon ())])
 
-fn head-extras
-  (-> #[(link-tag {rel= "icon" type= "image/png" href= "/Irij-favicon.png"}) (link-tag {rel= "stylesheet" href= "https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=JetBrains+Mono:wght@400&family=Roboto+Slab:wght@700&display=swap"})])
+fn head-extras :: #[_] _
+  (extras -> #[(link-tag {rel= "icon" type= "image/png" href= "/Irij-favicon.png"}) (link-tag {rel= "stylesheet" href= "https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=JetBrains+Mono:wght@400&family=Roboto+Slab:wght@700&display=swap"})] ++ extras)
+
+fn layout-head-extra :: _ #[_] _ #[_] _
+  (ttl h-extras active body-children -> page (ttl ++ " — Irij") (css ()) (head-extras h-extras) #[(div (cls "container") #[(header {} #[(div (cls "inner") #[(a {class= "logo" href= "/"} #[(img {src= "/Irij.png" alt= "Irij" class= "logo-img"})]) (make-nav active)])]) (main {} body-children) (footer {} #["Irij " ++ irij-version ++ " — Where contracts meet effects"])])])
 
 fn layout
-  (ttl active body-children -> page (ttl ++ " — Irij") (css ()) (head-extras ()) #[(div (cls "container") #[(header {} #[(div (cls "inner") #[(a {class= "logo" href= "/"} #[(img {src= "/Irij.png" alt= "Irij" class= "logo-img"})]) (make-nav active)])]) (main {} body-children) (footer {} #["Irij v0.2.0 — Where contracts meet effects"])])])
+  (ttl active body-children -> layout-head-extra ttl #[] active body-children)
 
 ;; ═══════════════════════════════════════════════════════════════════
 ;; Home page (combined: hero + features + examples + roadmap)
 ;; ═══════════════════════════════════════════════════════════════════
 
 fn home-hero
-  (-> div (cls "hero") #[(img {src= "/Irij.png" alt= "Irij" class= "hero-logo"}) (h2 {} #[(raw "Where <em>contracts</em> meet <em>effects</em>")]) (p (cls "sub") #["A JVM language with algebraic effects, runtime specs, and property-based contracts"]) (div (cls "badges") #[(badge "v0.2.0" "badge primary") (badge "JVM" "badge") (badge "Virtual Threads" "badge") (badge "ANTLR4" "badge")])])
+  (-> div (cls "hero") #[(img {src= "/Irij.png" alt= "Irij" class= "hero-logo"})
+                         (h2 {} #[(raw "Where <em>contracts</em> meet <em>effects</em>")])
+                         (p (cls "sub") #["A JVM language with algebraic effects, runtime specs, and property-based contracts"])
+                         (div (cls "badges") #[(badge irij-version "badge primary")
+                                               (badge "JVM" "badge")
+                                               (badge "Virtual Threads" "badge")
+                                               (badge "ANTLR4" "badge")])])
 
 ;; ── Feature cards ────────────────────────────────────────────────
 
@@ -324,7 +339,19 @@ fn phase-row
   (status label desc -> #[(span {class= "st " ++ status} #[(if (status == "done") "done" else "next")]) (span {} #[(strong {} #[label]) (raw (" " ++ desc))])])
 
 fn home-roadmap
-  (-> div (cls "phase") (phase-row "done" "Phase 0-2" "Parser, AST, Interpreter, REPL, CLI" ++ phase-row "done" "Phase 3" "Algebraic effects with deep handlers" ++ phase-row "done" "Phase 4" "Module system + standard library" ++ phase-row "done" "Phase 5" "Structured concurrency (virtual threads)" ++ phase-row "done" "Phase 6" "Contracts, blame tracking, QuickCheck laws" ++ phase-row "done" "Phase 7" "Effect row declarations + enforcement" ++ phase-row "done" "Phase 8" "Runtime specs, validation, Arbitrary, lint" ++ phase-row "done" "Phase 9" "Package management (deps.irj, git deps)" ++ phase-row "done" "Phase 10" "I/O: JSON, FileIO, HTTP client + server" ++ phase-row "done" "Phase 11" "Database effect (SQLite, std.db)" ++ phase-row "done" "Phase 12b" "nREPL Playground (browser sandbox)" ++ phase-row "planned" "Phase 12a" "Package Registry (app in Irij)" ++ phase-row "planned" "Future" "JVM interop, Channels, LSP, GraalVM native"))
+  (-> div (cls "phase") (phase-row "done" "Phase 0-2" "Parser, AST, Interpreter, REPL, CLI" ++
+                         phase-row "done" "Phase 3" "Algebraic effects with deep handlers" ++
+                         phase-row "done" "Phase 4" "Module system + standard library" ++
+                         phase-row "done" "Phase 5" "Structured concurrency (virtual threads)" ++
+                         phase-row "done" "Phase 6" "Contracts, blame tracking, QuickCheck laws" ++
+                         phase-row "done" "Phase 7" "Effect row declarations + enforcement" ++
+                         phase-row "done" "Phase 8" "Runtime specs, validation, Arbitrary, lint" ++
+                         phase-row "done" "Phase 9" "Package management (deps.irj, git deps)" ++
+                         phase-row "done" "Phase 10" "I/O: JSON, FileIO, HTTP client + server" ++
+                         phase-row "done" "Phase 11" "Database effect (SQLite, std.db)" ++
+                         phase-row "done" "Phase 12b" "nREPL Playground (browser sandbox)" ++
+                         phase-row "done" "Phase 12a" "Package Registry (app in Irij)" ++
+                         phase-row "planned" "Future" "JVM interop, Channels, LSP, GraalVM native"))
 
 ;; ── Full home page ───────────────────────────────────────────────
 
@@ -349,34 +376,31 @@ fn home-page
 ;; Playground page
 ;; ═══════════════════════════════════════════════════════════════════
 
-fn pg-head-extras
-  (-> #[
-    (link-tag {rel= "stylesheet" href= "https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.css"})
-    (el "script" {src= "https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.js"} #[])
-    (el "script" {src= "/irij-mode.js"} #[])
-    (el "script" {src= "/playground.js" defer= "defer"} #[])
-  ])
+pg-head-extras := #[
+  (link-tag {rel= "stylesheet" href= "https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.css"})
+  (el "script" {src= "https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.js"} #[])
+  (el "script" {src= "/irij-mode.js"} #[])
+  (el "script" {src= "/playground.js" defer= "defer"} #[])
+]
 
-fn pg-toolbar
-  (-> div (cls "pg-toolbar") #[(div {style= "display:flex;align-items:center;gap:.5rem"} #[(el "select" {id= "pg-examples"} #[(el "option" {value= ""} #["Load example..."])]) (el "button" {class= "pg-btn run" onclick= "runCode()"} #["Run"]) (el "button" {class= "pg-btn" onclick= "clearOutput()"} #["Clear"]) (el "button" {id= "pg-reset" class= "pg-btn" onclick= "resetSession()"} #["Reset"])]) (div {style= "display:flex;gap:.5rem"} #[(el "button" {class= "pg-btn" onclick= "shareCode()"} #["Share"])])])
+pg-toolbar := div (cls "pg-toolbar") #[(div {style= "display:flex;align-items:center;gap:.5rem"} #[(el "select" {id= "pg-examples"} #[(el "option" {value= ""} #["Load example..."])]) (el "button" {class= "pg-btn run" onclick= "runCode()"} #["Run"]) (el "button" {class= "pg-btn" onclick= "clearOutput()"} #["Clear"]) (el "button" {id= "pg-reset" class= "pg-btn" onclick= "resetSession()"} #["Reset"])]) (div {style= "display:flex;gap:.5rem"} #[(el "button" {class= "pg-btn" onclick= "shareCode()"} #["Share"])])]
 
-fn pg-editor-el
-  (-> div (cls "pg-editor") #[(el "textarea" {id= "pg-code"} #["println \"Hello, Irij!\""])])
+pg-editor-el := div (cls "pg-editor") #[(el "textarea" {id= "pg-code"} #["println \"Hello, Irij!\""])]
 
-fn pg-output-el
-  (-> #[(div (cls "pg-output-hdr") #[(span {} #["Output"]) (div (cls "pg-status") #[(span {id= "pg-dot" class= "pg-dot"} #[]) (span {id= "pg-status-text"} #["Ready"])])]) (div {id= "pg-out" class= "pg-output"} #[(span (cls "info") #["Press Ctrl+Enter or click Run to evaluate."])])])
+pg-output-el := #[
+  (div (cls "pg-output-hdr") #[(span {} #["Output"]) (div (cls "pg-status") #[(span {id= "pg-dot" class= "pg-dot"} #[]) (span {id= "pg-status-text"} #["Ready"])])])
+  (div {id= "pg-out" class= "pg-output"} #[(span (cls "info") #["Press Ctrl+Enter or click Run to evaluate."])])]
 
-fn pg-children
-  (-> #[(pg-toolbar ()) (pg-editor-el ())] ++ (pg-output-el ()))
+pg-children := #[pg-toolbar pg-editor-el] ++ pg-output-el
 
-fn playground-body
-  (-> div (cls "pg-wrap") (pg-children ()))
+playground-body := div (cls "pg-wrap") pg-children
 
 fn playground-page
-  (req -> page ("Playground — Irij") (css ()) ((head-extras ()) ++ (pg-head-extras ())) #[(div (cls "container") #[(header {} #[(div (cls "inner") #[(a {class= "logo" href= "/"} #[(img {src= "/Irij.png" alt= "Irij" class= "logo-img"})]) (make-nav "/playground")])]) (main {} #[(h2 {} #["Playground"]) (p (cls "sub") #["Write Irij code in the browser. Alt+Enter: eval form at cursor. Ctrl+Enter: eval all."]) (playground-body ())]) (footer {} #["Irij v0.2.0 — Where contracts meet effects"])])])
+  => req
+  html ~ layout-head-extra "Playground" pg-head-extras "/playground" #[(h2 {} #["Playground"]) (p (cls "sub") #["Write Irij code in the browser. Alt+Enter: eval form at cursor. Ctrl+Enter: eval all."]) playground-body]
 
 ;; ═══════════════════════════════════════════════════════════════════
-;; Session API + examples
+;; Playground Session API + examples
 ;; ═══════════════════════════════════════════════════════════════════
 
 ;; POST /api/session — create a new persistent sandbox session
@@ -456,20 +480,20 @@ fn seed-card-el
         (span {} #[(raw ("by <strong>" ++ s.owner ++ "</strong>"))])
         (span {} #[s.published])])])]
 
-fn seeds-page ::: Console
+fn seeds-page
   => request
   with default-db
     seeds := db-query registry-db "SELECT p.name, p.owner, p.license, v.version, v.description, v.published FROM packages p JOIN versions v ON v.package_name = p.name AND v.id = (SELECT MAX(id) FROM versions WHERE package_name = p.name) ORDER BY p.updated DESC" #[]
-    cards := seeds |> @ seed-card-el
-    html ~ layout "Seeds" "/seeds" #[
+    html ~ layout-head-extra "Seeds" #[(el "script" {type="module" src= "https://cdn.jsdelivr.net/gh/starfederation/datastar@1.0.0-RC.8/bundles/datastar.js"} #[])] "/seeds" #[
+      (el "script" {src= "https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.js"} #[])
       (h2 {} #["Seed Registry"])
       (p {class= "sub"} #["Browse and search Irij seeds (packages). Publish with: irij publish"])
       (div {class= "seeds-search"} #[
-        (el "input" {type= "text" placeholder= "Search seeds..." id= "seed-search" onkeyup= "searchSeeds(this.value)"} #[])])
-      (div {id= "seed-list"} cards)
+        (el "input" (assoc {type= "text" placeholder= "Search seeds..." id= "seed-search"} "data-on:keyup" "@get('api/seeds?q=' + evt.target.value)") #[])])
+      (div {id= "seed-list"} #[])
       (if (empty? seeds) (div {class= "empty-state"} #[(p {} #["No seeds published yet."]) (p {} #["Be the first! Run: irij publish"])]) else (div {} #[]))]
 
-fn seed-detail-page ::: Console
+fn seed-detail-page
   => request
   segments := path-segments request.path "/seeds"
   name := head segments
@@ -508,7 +532,7 @@ fn render-version-item
 ;; ═══════════════════════════════════════════════════════════════════
 
 ;; POST /api/seeds/publish — publish a seed (multipart: metadata JSON + tarball)
-fn handle-seed-publish ::: Console
+fn handle-seed-publish
   => request
   meta-json := raw-multipart-field request "metadata"
   meta := json-parse meta-json
@@ -522,7 +546,7 @@ fn handle-seed-publish ::: Console
   else
     do-publish request name version author description license
 
-fn do-publish ::: Console
+fn do-publish
   => request name version author description license
   tarball-dir := seeds-storage-dir ++ "/" ++ name
   make-dir tarball-dir
@@ -539,29 +563,33 @@ fn do-publish ::: Console
       json-response (json-encode ({ok= true name= name version= version}))
 
 ;; GET /api/seeds — list/search seeds
-fn handle-seed-list ::: Console
-  => request
-  q := request.query
-  has-search := starts-with? q "q="
-  if (q == "" || has-search == false)
-    with default-db
-      rows := db-query registry-db "SELECT p.name, p.owner, p.license, v.version, v.description, v.published FROM packages p JOIN versions v ON v.package_name = p.name AND v.id = (SELECT MAX(id) FROM versions WHERE package_name = p.name) ORDER BY p.updated DESC" #[]
-      json-response (json-encode rows)
+fn compose-query-data
+  => q
+  if (q == () || q == "")
+    #["SELECT p.name, p.owner, p.license, v.version, v.description, v.published FROM packages p JOIN versions v ON v.package_name = p.name AND v.id = (SELECT MAX(id) FROM versions WHERE package_name = p.name) ORDER BY p.updated DESC" #[]]
   else
-    term := substring q 2 (length q)
-    rows := search-seeds term
-    json-response (json-encode rows)
+    pattern := "%" ++ q ++ "%"
+    #["SELECT p.name, p.owner, p.license, v.version, v.description, v.published FROM packages p JOIN versions v ON v.package_name = p.name AND v.id = (SELECT MAX(id) FROM versions WHERE package_name = p.name) WHERE p.name LIKE ? OR v.description LIKE ? OR v.author LIKE ? ORDER BY CASE WHEN p.name = ? THEN 0 WHEN p.name LIKE ? THEN 1 ELSE 2 END, p.updated DESC" #[pattern pattern pattern q (q ++ "%")]]
 
-fn search-seeds ::: Console
-  => term
-  pattern := "%" ++ term ++ "%"
+fn perform-db-query
+  => q
   with default-db
-    db-query registry-db "SELECT p.name, p.owner, p.license, v.version, v.description, v.published FROM packages p JOIN versions v ON v.package_name = p.name AND v.id = (SELECT MAX(id) FROM versions WHERE package_name = p.name) WHERE p.name LIKE ? OR v.description LIKE ? OR v.author LIKE ? ORDER BY CASE WHEN p.name = ? THEN 0 WHEN p.name LIKE ? THEN 1 ELSE 2 END, p.updated DESC" #[pattern pattern pattern term (term ++ "%")]
+    #[sql params] := compose-query-data q
+    db-query registry-db sql params
+
+fn handle-seed-list
+  => request
+  params := split request.query "&"
+    |> @ (part -> split part "=")
+    |> fold (acc pair -> assoc acc (head pair) (last pair)) {}
+  seeds := perform-db-query ~ get "q" params
+  cards := seeds |> @ seed-card-el
+  ds-patch (ds-sse request) "#seed-list" ~ render (div {id= "seed-list"} cards)
 
 ;; GET /api/seeds/* — route by segment count:
 ;;   /api/seeds/:name              → detail
 ;;   /api/seeds/:name/:version/download → download tarball
-fn handle-seed-route ::: Console
+fn handle-seed-route
   => request
   segments := path-segments request.path "/api/seeds"
   count := length segments
@@ -573,7 +601,7 @@ fn handle-seed-route ::: Console
     else
       {status= 404 body= "Not found" headers= {}}
 
-fn handle-seed-detail ::: Console
+fn handle-seed-detail
   => name
   with default-db
     pkg := db-query registry-db "SELECT name, owner, license, created FROM packages WHERE name = ?" #[name]
@@ -583,7 +611,7 @@ fn handle-seed-detail ::: Console
       versions := db-query registry-db "SELECT id, version, description, readme, author, published FROM versions WHERE package_name = ? ORDER BY id DESC" #[name]
       json-response (json-encode ({package= (head pkg) versions= versions}))
 
-fn handle-seed-download ::: Console
+fn handle-seed-download
   => name version
   tarball-path := seeds-storage-dir ++ "/" ++ name ++ "/" ++ version ++ ".tar.gz"
   if (file-exists? tarball-path)

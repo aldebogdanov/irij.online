@@ -1,7 +1,7 @@
 [project]
-name = "irij-online"
-version = "0.2.1"
-description = "Irij language website and playground"
+name = "irij.online"
+version = "0.3.0"
+description = "Irij language website, seeds registry and playground"
 
 [seeds]
-vrata = { git = "https://github.com/aldebogdanov/vrata.git", tag = "v0.1.2" }
+vrata = "0.1.2"
