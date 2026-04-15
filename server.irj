@@ -573,16 +573,25 @@ fn perform-db-query
     #[sql params] := compose-query-data q
     db-query registry-db sql params
 
+fn empty-message
+  => q
+  if (q == () || q == "")
+    #[(p {} #["No seeds published yet."]) (p {} #["Be the first! Run: "
+                                                  (code {} #["irij publish"])])]
+  else
+    #[(p {} #["No seeds for your query."]) (p {} #["Need to add one? Run: "
+                                                   (code {} #["irij publish"])])]
+
 fn handle-seed-list
   => request
   params := split request.query "&"
     |> @ (part -> split part "=")
     |> fold (acc pair -> assoc acc (head pair) (last pair)) {}
-  seeds := perform-db-query ~ get "q" params
+  q := get "q" params
+  seeds := perform-db-query q
   cards := seeds |> @ seed-card-el
   dom := (if (empty? cards)
-    #[(div {class= "empty-state"} #[(p {} #["No seeds published yet."]) (p {} #["Be the first! Run: "
-                                                                                (code {} #["irij publish"])])])]
+    #[(div {class= "empty-state"} ~ empty-message q)]
     else
     cards)
   ds-patch (ds-sse request) "#seed-list" ~ render (div {id= "seed-list"} dom)
