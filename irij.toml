@@ -1,6 +1,6 @@
 [project]
 name = "irij.online"
-version = "0.3.0"
+version = "0.3.1"
 description = "Irij language website, seeds registry and playground"
 
 [seeds]

@@ -482,16 +482,13 @@ fn seed-card-el
 
 fn seeds-page
   => request
-  with default-db
-    seeds := db-query registry-db "SELECT p.name, p.owner, p.license, v.version, v.description, v.published FROM packages p JOIN versions v ON v.package_name = p.name AND v.id = (SELECT MAX(id) FROM versions WHERE package_name = p.name) ORDER BY p.updated DESC" #[]
-    html ~ layout-head-extra "Seeds" #[(el "script" {type="module" src= "https://cdn.jsdelivr.net/gh/starfederation/datastar@1.0.0-RC.8/bundles/datastar.js"} #[])] "/seeds" #[
-      (el "script" {src= "https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.js"} #[])
-      (h2 {} #["Seed Registry"])
-      (p {class= "sub"} #["Browse and search Irij seeds (packages). Publish with: irij publish"])
-      (div {class= "seeds-search"} #[
-        (el "input" (assoc {type= "text" placeholder= "Search seeds..." id= "seed-search"} "data-on:keyup" "@get('api/seeds?q=' + evt.target.value)") #[])])
-      (div {id= "seed-list"} #[])
-      (if (empty? seeds) (div {class= "empty-state"} #[(p {} #["No seeds published yet."]) (p {} #["Be the first! Run: irij publish"])]) else (div {} #[]))]
+  html ~ layout-head-extra "Seeds" #[(el "script" {type="module" src= "https://cdn.jsdelivr.net/gh/starfederation/datastar@1.0.0-RC.8/bundles/datastar.js"} #[])] "/seeds" #[
+    (el "script" {src= "https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.js"} #[])
+    (h2 {} #["Seed Registry"])
+    (p {class= "sub"} #["Browse and search Irij seeds (packages). Publish with: irij publish"])
+    (div {class= "seeds-search"} #[
+      (el "input" (assoc {type= "text" placeholder= "Search seeds..." id= "seed-search"} "data-on:keyup" "@get('api/seeds?q=' + evt.target.value)") #[])])
+    (div {id= "seed-list" data-init= "@get('api/seeds')"} #[])]
 
 fn seed-detail-page
   => request
@@ -559,7 +556,6 @@ fn do-publish
     else
       db-exec registry-db "INSERT INTO packages (name, owner, license, updated) VALUES (?, ?, ?, datetime('now')) ON CONFLICT(name) DO UPDATE SET license = excluded.license, updated = datetime('now')" #[name author license]
       db-exec registry-db "INSERT INTO versions (package_name, version, description, readme, author) VALUES (?, ?, ?, ?, ?)" #[name version description "" author]
-      println ~ "Published: " ++ name ++ " " ++ version
       json-response (json-encode ({ok= true name= name version= version}))
 
 ;; GET /api/seeds — list/search seeds
@@ -584,7 +580,12 @@ fn handle-seed-list
     |> fold (acc pair -> assoc acc (head pair) (last pair)) {}
   seeds := perform-db-query ~ get "q" params
   cards := seeds |> @ seed-card-el
-  ds-patch (ds-sse request) "#seed-list" ~ render (div {id= "seed-list"} cards)
+  dom := (if (empty? cards)
+    #[(div {class= "empty-state"} #[(p {} #["No seeds published yet."]) (p {} #["Be the first! Run: "
+                                                                                (code {} #["irij publish"])])])]
+    else
+    cards)
+  ds-patch (ds-sse request) "#seed-list" ~ render (div {id= "seed-list"} dom)
 
 ;; GET /api/seeds/* — route by segment count:
 ;;   /api/seeds/:name              → detail
