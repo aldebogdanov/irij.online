@@ -429,7 +429,7 @@ fn handle-session-destroy
   json-response (json-encode ({ok= true}))
 
 ;; GET /api/session/stream?id=xxx — SSE stream of session output
-fn handle-session-stream
+fn handle-session-stream ::: Serve
   => request
   q := request.query
   parts := split q "="
