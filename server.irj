@@ -678,20 +678,22 @@ fn handle-seed-download ::: FileIO
 
 ;; ── Docs / internals knowledge directory ────────────────────────
 ;;
-;; Surface for the under-the-hood design docs. Pages live in the
-;; main Irij repo at `docs/internals/` — this page lists them with
-;; short descriptions and links to the GitHub-rendered Markdown.
+;; Pages live in the main Irij repo at `docs/internals/`. We surface
+;; them two ways:
+;;   /docs           → index card grid; each card links to /docs/:slug
+;;   /docs/:slug     → inline render of the matching .md via marked.js,
+;;                     fetched from raw.githubusercontent (CORS-friendly)
 
 fn doc-card
   (slug ttl desc -> div (cls "card") #[
-    (h3 {} #[(a {href= ("https://github.com/aldebogdanov/irij/blob/main/docs/internals/" ++ slug ++ ".md") target= "_blank"} #[ttl])])
+    (h3 {} #[(a {href= ("/docs/" ++ slug)} #[ttl])])
     (p {} #[desc])])
 
 fn docs-page
   (req ->
     html ~ layout "Docs" "/docs" #[
       (h2 {} #["How Irij Works"])
-      (p {} #["Design decisions, code structure, and the trade-offs behind each subsystem. Pages hosted on GitHub for now; will be rendered inline in a future release."])
+      (p {} #["Design decisions, code structure, and the trade-offs behind each subsystem. Rendered inline from the Irij repo's docs/internals/ directory."])
       (div (cls "feature-grid") #[
         (doc-card "pipeline" "Pipeline" "Source → AST → values. The two-back-ends split and what it implies.")
         (doc-card "parser" "Parser" "ANTLR4 grammar + indent rewriter. Lexer quirks and reserved-word traps.")
@@ -706,12 +708,29 @@ fn docs-page
         (doc-card "concurrency" "Concurrency" "Virtual threads, structured concurrency, cross-mode dispatch.")
         (doc-card "jvm-capability" "JVM Capability" "Why all Java interop requires ::: JVM.")
         (doc-card "stdlib" "Stdlib" "What lives in Java vs Irij. The Phase 3 port.")
+        (doc-card "nrepl" "nREPL" "Protocol, sessions, eval vs eval-bytecode.")
         (doc-card "glossary" "Glossary" "Terms used throughout these docs.")])])
+
+;; Single doc page: shell + marked.js (CDN) + /docs.js (resource)
+;; that fetches the .md from GitHub Raw and renders inline.
+doc-page-head-extras := #[
+  (el "script" {src= "https://cdn.jsdelivr.net/npm/marked/marked.min.js"} #[])
+  (el "script" {src= "/docs.js" defer= "defer"} #[])
+  (el "style" {} #[(raw ".doc-md h1{font-size:1.8rem;margin:1.5rem 0 1rem}.doc-md h2{font-size:1.4rem;margin:2rem 0 .75rem;border-bottom:1px solid var(--border);padding-bottom:.3rem}.doc-md h3{font-size:1.1rem;margin:1.5rem 0 .5rem}.doc-md p{color:var(--font-color);margin:.5rem 0}.doc-md pre{background:var(--code-bg);padding:.75rem 1rem;border-radius:.4rem;overflow-x:auto;font-size:.85rem}.doc-md code{background:var(--code-bg);padding:.1rem .3rem;border-radius:.25rem;font-size:.9em}.doc-md pre code{background:none;padding:0}.doc-md table{width:100%;border-collapse:collapse;margin:1rem 0;font-size:.9rem}.doc-md th,.doc-md td{border:1px solid var(--border);padding:.4rem .6rem;text-align:left}.doc-md th{background:var(--code-bg);font-weight:600}.doc-md ul,.doc-md ol{margin:.5rem 0 1rem 1.5rem}.doc-md li{margin:.25rem 0;color:var(--font-color)}.doc-md a{color:var(--accent)}.doc-md blockquote{border-left:3px solid var(--accent);padding-left:1rem;color:var(--muted);margin:1rem 0}.doc-back{display:inline-block;margin-bottom:1rem;font-size:.9rem;color:var(--muted)}")])
+]
+
+fn doc-detail-page
+  (req ->
+    html ~ layout-head-extra "Docs" doc-page-head-extras "/docs" #[
+      (a {href= "/docs" class= "doc-back"} #["← All docs"])
+      (h2 {id= "doc-title"} #["Loading…"])
+      (div {id= "doc-content" class= "doc-md"} #[(p {} #["Loading…"])])])
 
 routes := #[
   (route "GET" "/" home-page)
   (route "GET" "/playground" playground-page)
   (route "GET" "/docs" docs-page)
+  (route-prefix "GET" "/docs/" doc-detail-page)
   (route "POST" "/eval" handle-eval)
   (route "POST" "/api/session" handle-session-create)
   (route "POST" "/api/session/eval" handle-session-eval)
