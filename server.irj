@@ -51,15 +51,26 @@ init-registry-db registry-db
 fn css
   (-> stylesheet #[
     ;; ── chota theme override (CSS variables) ─────────────────────
-    (rule ":root" "--color-primary:#e67e22;--color-lightGrey:#d1d5db;--color-grey:#6b7280;--color-darkGrey:#334155;--color-error:#dc2626;--color-success:#16a34a;--bg-color:#e8edf0;--bg-secondary-color:#f8f9fc;--font-color:#2d3748;--font-family-sans:Inter,-apple-system,sans-serif;--font-family-mono:JetBrains Mono,Fira Code,monospace")
+    ;; Fixed 16px root — explicit sizes throughout, no viewport-scaled
+    ;; clamp (it overshoots on retina + 4K displays). Layout width is
+    ;; capped by `.container` max-width below.
+    (rule ":root" "font-size:16px;--color-primary:#e67e22;--color-lightGrey:#d1d5db;--color-grey:#6b7280;--color-darkGrey:#334155;--color-error:#dc2626;--color-success:#16a34a;--bg-color:#e8edf0;--bg-secondary-color:#f8f9fc;--font-color:#2d3748;--font-family-sans:Inter,-apple-system,sans-serif;--font-family-mono:JetBrains Mono,Fira Code,monospace")
     ;; Irij-specific colour roles built on the theme variables.
     (rule ":root" "--accent:var(--color-primary);--accent2:var(--color-darkGrey);--muted:var(--color-grey);--border:var(--color-lightGrey);--code-bg:var(--bg-secondary-color);--card-bg:#fff")
     ;; ── Base typography (chota's body is sensible; tighten line-height) ──
     (rule "body" "line-height:1.7")
+    ;; Container caps at ~1100px so big screens get healthy side
+    ;; margins. Side padding scales modestly. chota's default 1200px
+    ;; was too wide for content-heavy pages.
+    (rule ".container" "max-width:1100px;margin:0 auto;padding:0 2rem")
     (rule "h1,h2,h3,h4,h5,h6" "color:var(--accent2);font-weight:600")
     (rule "h2" "font-size:1.8rem;margin-bottom:1.5rem")
     (rule "h3" "font-size:1.1rem;margin-bottom:.75rem")
     (rule "p" "color:var(--muted)")
+    ;; Two-column layout for paired code examples. On wide screens
+    ;; widen the gap; on medium screens stay two-col; mobile collapses
+    ;; via the media query below.
+    (rule ".two-col" "display:grid;grid-template-columns:1fr 1fr;gap:2rem;margin:1rem 0")
     ;; ── Header / responsive nav ─────────────────────────────────
     (rule ".site-header" "padding:1rem 0;border-bottom:2px solid var(--border);position:relative")
     (rule ".site-header .inner" "display:flex;align-items:center;justify-content:space-between;gap:1rem;flex-wrap:wrap")
@@ -72,11 +83,11 @@ fn css
     (rule ".nav-links a:hover" "color:var(--accent)")
     (rule ".nav-links a.active" "color:var(--accent);border-bottom:2px solid var(--accent);padding-bottom:2px")
     ;; ── Hero ───────────────────────────────────────────────────
-    (rule ".hero" "text-align:center;padding:3rem 0 2rem")
-    (rule ".hero-logo" "height:160px;width:auto;margin-bottom:1.5rem")
-    (rule ".hero h2" "font-size:2.6rem;font-weight:300;color:var(--font-color);margin-bottom:.5rem")
+    (rule ".hero" "text-align:center;padding:2rem 0 1.5rem")
+    (rule ".hero-logo" "height:120px;width:auto;margin-bottom:1rem")
+    (rule ".hero h2" "font-size:2rem;font-weight:300;color:var(--font-color);margin-bottom:.5rem")
     (rule ".hero h2 em" "font-style:normal;color:var(--accent)")
-    (rule ".hero .sub" "color:var(--muted);font-size:1.05rem;margin:.5rem 0 1.5rem")
+    (rule ".hero .sub" "color:var(--muted);font-size:1rem;margin:.5rem 0 1rem")
     (rule ".badges" "display:flex;gap:.5rem;justify-content:center;flex-wrap:wrap")
     (rule ".badge" "display:inline-block;background:var(--card-bg);border:1px solid var(--border);padding:.3rem .8rem;border-radius:1rem;font-size:.8rem;color:var(--muted)")
     (rule ".badge.primary" "background:var(--accent);color:#fff;border-color:var(--accent)")
@@ -98,7 +109,9 @@ fn css
     ;; ── Footer ──────────────────────────────────────────────────
     (rule "footer" "border-top:2px solid var(--border);padding:1.5rem 0;text-align:center;color:var(--muted);font-size:.85rem;margin-top:3rem")
     ;; ── Roadmap rows ────────────────────────────────────────────
-    (rule ".phase" "display:grid;grid-template-columns:auto 1fr;gap:.25rem .75rem;align-items:center")
+    (rule ".phase" "display:grid;grid-template-columns:auto 1fr;gap:.5rem .75rem;align-items:center;font-size:.95rem")
+    (rule ".phase strong" "font-weight:600;color:var(--accent2)")
+    (rule ".phase span" "line-height:1.5")
     (rule ".st" "font-size:.85rem;padding:.15rem .5rem;border-radius:.25rem;text-align:center")
     (rule ".done" "background:#dcfce7;color:#166534")
     (rule ".planned" "background:#fef3c7;color:#92400e")
