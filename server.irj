@@ -394,7 +394,10 @@ fn home-roadmap
                          phase-row "done" "Phase 12a" "Package Registry (app in Irij)" ++
                          phase-row "done" "Phase 13" "Java interop (Class/member, dot-access)" ++
                          phase-row "done" "Phase 14a-c" "Bytecode compiler: threaded + state-machine effects, hot-redef, JVM capability" ++
-                         phase-row "planned" "Future" "Channels, LSP, GraalVM native, more stdlib effects"))
+                         phase-row "done" "v0.5.0" "Effect-row soundness (compile-time lint, per-ref JVM capability); full bytecode spec parity (composite/arrow/enum, user product/sum); pre/post + in/out contracts in bytecode; embedded nREPL in built JARs" ++
+                         phase-row "next" "v0.6.0" "Laws + Arbitrary on bytecode; cross-eval fn defs in nREPL; bytecode becomes default for run/test/eval; LSP MVP" ++
+                         phase-row "next" "v0.7.0" "std.auth (JWT, sessions, OAuth2); std.queue (Redis/SQLite); multi-tenant package registry; GraalVM native image" ++
+                         phase-row "planned" "Future" "Channels (send/recv/select), streams/flows, choreographic programming, refinement types, content-addressed code"))
 
 ;; ── Full home page ───────────────────────────────────────────────
 
@@ -503,6 +506,9 @@ pg-examples := #[
   {title= "Concurrency" code= ";; Spawned threads run in virtual threads.\n;; Their output streams here in real-time via SSE.\n\nfn worker ::: Console Time\n  => name ms\n  sleep ms\n  println ~ name ++ \" done (\" ++ (to-str ms) ++ \"ms)\"\n\nspawn (-> worker \"alpha\" 200)\nspawn (-> worker \"beta\" 100)\nspawn (-> worker \"gamma\" 300)\n\nprintln \"all spawned\""}
   {title= "Hot Redefinition" code= ";; Define a function, start a loop, then\n;; redefine the function — it updates live!\n\nfn greet ::: Console\n  => name\n  println ~ \"Hello, \" ++ name ++ \"!\"\n\nfn run-loop ::: Console Time\n  => n\n  greet \"World\"\n  sleep 500\n  if (n > 1) (run-loop (n - 1)) else (println \"done\")\n\nspawn (-> run-loop 6)\n\n;; Now select all, change Hello to Hey,\n;; and press Ctrl+Enter while it runs!"}
   {title= "Java Interop" code= ";; Clojure-style Class/member — no imports needed.\n;; java.lang.* auto-resolves unqualified.\n\nprintln (Math/abs (-7))\nprintln (Math/max 3 5)\nprintln (Math/PI)\n\nstamp := java.time.Instant/now ()\nprintln stamp\n\n;; Instance methods via dot-access:\nprintln (\"hello\".toUpperCase ())\nprintln (\"  trim me  \".trim ())\n\n;; Constructors via Class/new:\nrnd := java.util.Random/new 42\nprintln (rnd.nextInt 100)"}
+  {title= "Protocols: Show" code= ";; Protocols give you ad-hoc polymorphism — one name,\n;; per-type implementations. Dispatch is on the first arg's\n;; runtime type tag.\n\nproto Show a\n  show :: a -> Str\n\nimpl Show for Int\n  show := (n -> to-str n)\n\nimpl Show for Str\n  show := (s -> \"\\\"\" ++ s ++ \"\\\"\")\n\nimpl Show for Bool\n  show := (b -> if b \"true\" else \"false\")\n\nprintln (show 42)\nprintln (show \"hello\")\nprintln (show true)"}
+  {title= "Protocols: Monoid" code= ";; Two methods per impl — a constant and a binary op.\n;; Operators like (+) and (++) are first-class values you\n;; can hand to a protocol slot directly.\n\nproto Monoid a\n  empty  :: a\n  append :: a -> a -> a\n\nimpl Monoid for Int\n  empty  := 0\n  append := (+)\n\nimpl Monoid for Str\n  empty  := \"\"\n  append := (++)\n\nimpl Monoid for Vector\n  empty  := #[]\n  append := (++)\n\n;; Pass any value of the type to pick the impl:\nprintln (append 10 20)\nprintln (append \"hi, \" \"world\")\nprintln (append #[1 2] #[3 4])"}
+  {title= "Protocols: data types" code= ";; Protocols + user-declared specs: define a shape, then\n;; teach it to print itself.\n\nspec Point\n  Point Int Int\n\nfn fmt-point\n  (Point x y) => to-str x ++ \", \" ++ to-str y\n\nproto Displayable a\n  display :: a -> Str\n\nimpl Displayable for Point\n  display := (p -> \"(\" ++ fmt-point p ++ \")\")\n\nimpl Displayable for Int\n  display := (n -> \"int<\" ++ to-str n ++ \">\")\n\nprintln (display (Point 3 4))\nprintln (display 99)"}
 ]
 
 fn handle-examples
