@@ -579,7 +579,7 @@ fn render-version-item
 ;; ═══════════════════════════════════════════════════════════════════
 
 ;; POST /api/seeds/publish — publish a seed (multipart: metadata JSON + tarball)
-fn handle-seed-publish
+fn handle-seed-publish ::: FileIO
   => request
   meta-json := raw-multipart-field request "metadata"
   meta := json-parse meta-json
@@ -632,7 +632,7 @@ fn empty-message
     #[(p {} #["No seeds for your query."]) (p {} #["Need to add one? Run: "
                                                    (code {} #["irij publish"])])]
 
-fn handle-seed-list
+fn handle-seed-list ::: Serve
   => request
   params := split request.query "&"
     |> @ (part -> split part "=")
@@ -649,7 +649,7 @@ fn handle-seed-list
 ;; GET /api/seeds/* — route by segment count:
 ;;   /api/seeds/:name              → detail
 ;;   /api/seeds/:name/:version/download → download tarball
-fn handle-seed-route
+fn handle-seed-route ::: FileIO Serve
   => request
   segments := path-segments request.path "/api/seeds"
   count := length segments
