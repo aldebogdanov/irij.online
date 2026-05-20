@@ -59,7 +59,11 @@ fn css
     ;; Irij-specific colour roles built on the theme variables.
     (rule ":root" "--accent:var(--color-primary);--accent2:var(--color-darkGrey);--muted:var(--color-grey);--border:var(--color-lightGrey);--code-bg:var(--bg-secondary-color);--card-bg:#fff")
     ;; ── Base typography (chota's body is sensible; tighten line-height) ──
-    (rule "body" "line-height:1.7")
+    ;; chota.css sets `body { font-size: 1.6rem }` which, against our
+    ;; 16px root, computes to 25.6px (way too large for body text).
+    ;; Override to 1rem (= 16px at our root) so headings and sub-text
+    ;; sized in rem keep their intended ratios.
+    (rule "body" "font-size:1rem;line-height:1.7")
     ;; Container caps at ~1100px so big screens get healthy side
     ;; margins. Side padding scales modestly. chota's default 1200px
     ;; was too wide for content-heavy pages.
