@@ -11,7 +11,7 @@ use std.time :open
 use std.datastar :open
 use std.list :open
 
-irij-version := "v0.6.2"
+irij-version := "v0.6.3"
 
 ;; ═══════════════════════════════════════════════════════════════════
 ;; Seed Registry — Database
