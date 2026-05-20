@@ -11,7 +11,7 @@ use std.time :open
 use std.datastar :open
 use std.list :open
 
-irij-version := "v0.6.3"
+irij-version := "v0.6.4"
 
 ;; ═══════════════════════════════════════════════════════════════════
 ;; Seed Registry — Database
@@ -259,7 +259,7 @@ fn home-hero
 ;; ── Feature cards ────────────────────────────────────────────────
 
 fn home-features
-  (-> div (cls "feature-grid") #[(card "Algebraic Effects" "First-class effect system with deep handlers. Mock any side effect in tests. State-machine bytecode for hot perform-loops.") (card "Runtime Specs" "Malli-inspired specs replace types. Certify values at construction, validate at boundaries.") (card "Contracts & Laws" "Pre/post conditions with blame tracking. QuickCheck-style property verification.") (card "Structured Concurrency" "scope/fork/await, par, race, timeout. Java virtual threads with auto-cancellation.") (card "Pipeline Operators" "|> pipeline, @ map, /? filter, /+ fold. >> composition, ~ apply-to-rest.") (card "Module System & Packages" "use mod.name :open. Git deps via deps.irj. Pub/private exports. Effect-gated APIs.") (card "Bytecode Compiler" "irij build emits a self-contained JAR. Two lowerings: threaded (vthread+queue) and state-machine (single-thread, trampolined).") (card "Hot Redef + Java Interop" "REPL-driven fn redefinition via invokedynamic + MutableCallSite. Java classes via Class/method, dot-access, ::: JVM capability tracking.")])
+  (-> div (cls "feature-grid") #[(card "Algebraic Effects" "First-class effect system with deep handlers. Mock any side effect in tests. State-machine bytecode for hot perform-loops.") (card "Parametric Effect Rows" "Higher-order fns declare row variables: fold :: (Fn):eff _ _ _ ::: eff. The callback's effect row binds eff and propagates into the caller's row at each call site. No more ::: Any erasure.") (card "Runtime Specs" "Malli-inspired specs replace types. Certify values at construction, validate at boundaries.") (card "Contracts & Laws" "Pre/post conditions with blame tracking. QuickCheck-style property verification.") (card "Structured Concurrency" "scope/fork/await, par, race, timeout. Java virtual threads with auto-cancellation.") (card "Pipeline Operators" "|> pipeline, @ map, /? filter, /+ fold. >> composition, ~ apply-to-rest.") (card "Module System & Packages" "use mod.name :open. Git deps via deps.irj. Pub/private exports. Effect-gated APIs.") (card "Bytecode Compiler" "irij build emits a self-contained JAR — bytecode by default. Two lowerings: threaded (vthread+queue) and state-machine (single-thread, trampolined). Tree-walking interpreter is deprecated.") (card "Hot Redef + Java Interop" "REPL-driven fn redefinition via invokedynamic + MutableCallSite. Java classes via Class/member, dot-access, ::: JVM capability tracking.")])
 
 ;; ── Code examples ────────────────────────────────────────────────
 
@@ -398,9 +398,12 @@ fn home-roadmap
                          phase-row "done" "Phase 12a" "Package Registry (app in Irij)" ++
                          phase-row "done" "Phase 13" "Java interop (Class/member, dot-access)" ++
                          phase-row "done" "Phase 14a-c" "Bytecode compiler: threaded + state-machine effects, hot-redef, JVM capability" ++
-                         phase-row "done" "v0.5.0" "Effect-row soundness (compile-time lint, per-ref JVM capability); full bytecode spec parity (composite/arrow/enum, user product/sum); pre/post + in/out contracts in bytecode; embedded nREPL in built JARs" ++
-                         phase-row "next" "v0.6.0" "Laws + Arbitrary on bytecode; cross-eval fn defs in nREPL; bytecode becomes default for run/test/eval; LSP MVP" ++
-                         phase-row "next" "v0.7.0" "std.auth (JWT, sessions, OAuth2); std.queue (Redis/SQLite); multi-tenant package registry; GraalVM native image" ++
+                         phase-row "done" "v0.5.0" "Effect-row soundness (compile-time lint, per-ref JVM capability); full bytecode spec parity; pre/post contracts in bytecode" ++
+                         phase-row "done" "v0.5.x" "Bytecode-mode parity for the full irij.online website: SQLite/HTTP/SSE/multipart/JSON/FileIO/sandboxed-interpreter tier ported; Irij source line numbers carried into JVM stack traces" ++
+                         phase-row "done" "v0.6.0" "Parametric effect rows ((Fn):eff / (_ -> Bool):eff / ::: eff); ::: Any hard-removed from user code; multi-line error chains pointing at row-var binding sites" ++
+                         phase-row "done" "v0.6.x" "Interpreter-removal Phases R1-R4: nREPL eval defaults to bytecode + cross-eval fn defs; every builtin emitted in bytecode; irij build defaults to bytecode-sm" ++
+                         phase-row "next" "v0.7.0" "R5: delete dev.irij.interpreter package; std.auth (JWT, sessions); capabilities-style raw-* (Eff/Koka pattern); row-vars on record specs (precise std.serve router); LSP MVP" ++
+                         phase-row "next" "v0.8.0" "std.queue (Redis/SQLite); multi-tenant package registry; GraalVM native image; Handler:Effect specs for dynamic-handler typing" ++
                          phase-row "planned" "Future" "Channels (send/recv/select), streams/flows, choreographic programming, refinement types, content-addressed code"))
 
 ;; ── Full home page ───────────────────────────────────────────────
@@ -709,7 +712,7 @@ fn docs-page
         (doc-card "pipeline" "Pipeline" "Source → AST → values. The two-back-ends split and what it implies.")
         (doc-card "parser" "Parser" "ANTLR4 grammar + indent rewriter. Lexer quirks and reserved-word traps.")
         (doc-card "ast" "AST" "Sealed-interface hierarchies for Decl/Stmt/Expr/Pattern. Why records.")
-        (doc-card "interpreter" "Interpreter" "Tree-walking eval, environments, effect stack, handler dispatch.")
+        (doc-card "interpreter" "Interpreter (deprecated)" "Tree-walking eval, environments, effect stack, handler dispatch. Scheduled for removal in v0.7.0; kept as the eval-interp nREPL op during transition.")
         (doc-card "bytecode" "Bytecode Compiler" "ClassEmitter + ASM. Method shape, variable resolution, indirection.")
         (doc-card "effects" "Effects" "Threaded vs state-machine lowering. Trampoline + lifted locals.")
         (doc-card "tco" "Tail-Call Optimization" "Self-TCO via GOTO + arg rebind. Mutual TCO trade-offs.")
