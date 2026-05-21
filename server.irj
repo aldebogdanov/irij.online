@@ -11,7 +11,7 @@ use std.time :open
 use std.datastar :open
 use std.list :open
 
-irij-version := "v0.6.20"
+irij-version := "v0.6.21"
 
 ;; ═══════════════════════════════════════════════════════════════════
 ;; Seed Registry — Database
@@ -330,8 +330,9 @@ fn ex-parametric-effects
     ""
     "<span class=\"c\">;; Effectful callback — Console flows in automatically.</span>"
     "<span class=\"k\">fn</span> shout <span class=\"k\">:::</span> <span class=\"t\">Console</span>"
-    "  _ <span class=\"op\">=></span>"
-    "    fold (n acc <span class=\"op\">-></span> (println n) <span class=\"op\">|></span> (acc<span class=\"op\">+</span>)) <span class=\"n\">0</span> #[<span class=\"n\">1 2 3</span>]"
+    "  <span class=\"op\">=></span>"
+    "  sum := fold (acc n <span class=\"op\">-></span> println n <span class=\"k\">;</span> acc <span class=\"op\">+</span> n) <span class=\"n\">0</span> #[<span class=\"n\">1 2 3</span>]"
+    "  println sum"
   ])])
 
 fn ex-concurrency
@@ -348,14 +349,15 @@ fn ex-concurrency
   ])])
 
 fn ex-imperative
-  (-> div {} #[(h3 {} #["Imperative Functions"]) (code-lines #[
-    "<span class=\"k\">fn</span> greet <span class=\"k\">:::</span> <span class=\"t\">Console</span>"
+  (-> div {} #[(h3 {} #["Functions"]) (code-lines #[
+
+    "<span class=\"c\">;; Three fn body styles:</span>"
+    "<span class=\"k\">fn</span> greet <span class=\"k\">:::</span> <span class=\"t\">Console</span>"           "<span class=\"c\">;; lambda</span>"
     "  <span class=\"op\">=></span> name"
     "  msg := <span class=\"s\">\"Hello, \"</span> <span class=\"op\">++</span> name"
     "  println msg"
     "  msg"
     ""
-    "<span class=\"c\">;; Three fn body styles:</span>"
     "<span class=\"k\">fn</span> add (x y <span class=\"op\">-></span> x + y)          <span class=\"c\">;; lambda</span>"
     "<span class=\"k\">fn</span> fib"
     "  <span class=\"n\">0</span> <span class=\"op\">=></span> <span class=\"n\">1</span>                        <span class=\"c\">;; match arms</span>"
