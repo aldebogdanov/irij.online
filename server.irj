@@ -11,7 +11,7 @@ use std.time :open
 use std.datastar :open
 use std.list :open
 
-irij-version := "v0.6.7"
+irij-version := "v0.6.20"
 
 ;; ═══════════════════════════════════════════════════════════════════
 ;; Seed Registry — Database
@@ -119,7 +119,8 @@ fn css
     (rule ".phase span" "line-height:1.5")
     (rule ".st" "font-size:.85rem;padding:.15rem .5rem;border-radius:.25rem;text-align:center")
     (rule ".done" "background:#dcfce7;color:#166534")
-    (rule ".planned" "background:#fef3c7;color:#92400e")
+    (rule ".next" "background:#dbeafe;color:#1e40af")
+    (rule ".planned" "background:#f1f5f9;color:#475569")
     (rule ".pg-wrap" "display:flex;flex-direction:column;gap:0")
     (rule ".pg-toolbar" "display:flex;align-items:center;justify-content:space-between;padding:.75rem 0;gap:.5rem")
     (rule ".pg-toolbar select" "font-family:inherit;font-size:.85rem;padding:.4rem .75rem;border:1px solid var(--border);border-radius:.375rem;background:var(--card-bg);color:var(--fg);cursor:pointer")
@@ -259,7 +260,7 @@ fn home-hero
 ;; ── Feature cards ────────────────────────────────────────────────
 
 fn home-features
-  (-> div (cls "feature-grid") #[(card "Algebraic Effects" "First-class effect system with deep handlers. Mock any side effect in tests. State-machine bytecode for hot perform-loops.") (card "Parametric Effect Rows" "Higher-order fns declare row variables: fold :: (Fn):eff _ _ _ ::: eff. The callback's effect row binds eff and propagates into the caller's row at each call site. No more ::: Any erasure.") (card "Runtime Specs" "Malli-inspired specs replace types. Certify values at construction, validate at boundaries.") (card "Contracts & Laws" "Pre/post conditions with blame tracking. QuickCheck-style property verification.") (card "Structured Concurrency" "scope/fork/await, par, race, timeout. Java virtual threads with auto-cancellation.") (card "Pipeline Operators" "|> pipeline, @ map, /? filter, /+ fold. >> composition, ~ apply-to-rest.") (card "Module System & Packages" "use mod.name :open. Git deps via deps.irj. Pub/private exports. Effect-gated APIs.") (card "Bytecode Compiler" "irij build emits a self-contained JAR — bytecode by default. Two lowerings: threaded (vthread+queue) and state-machine (single-thread, trampolined). Tree-walking interpreter is deprecated.") (card "Hot Redef + Java Interop" "REPL-driven fn redefinition via invokedynamic + MutableCallSite. Java classes via Class/member, dot-access, ::: JVM capability tracking.")])
+  (-> div (cls "feature-grid") #[(card "Algebraic Effects" "First-class effect system with deep handlers. Mock any side effect in tests. State-machine bytecode lowering for hot perform-loops.") (card "Parametric Effect Rows" "Higher-order fns declare row variables: fold :: (Fn):eff _ _ _ ::: eff. The callback's effect row binds eff and propagates into the caller's row at each call site. Compile-time enforcement, no runtime erasure.") (card "Runtime Specs" "Malli-inspired specs replace types. Certify values at construction, validate at boundaries. Spec-annotated pub fns are mandatory; lint enforces it.") (card "Contracts" "Pre/post conditions on functions, in/out contracts at module boundaries. Blame tracking — pre-failure accuses the caller, post-failure accuses the implementation.") (card "Structured Concurrency" "scope/fork/await, par, race, timeout. Java virtual threads with auto-cancellation. Spawned fibers inherit effect row + session namespace.") (card "Pipeline Operators" "|> pipeline, @ map, /? filter, /+ fold. >> composition, ~ apply-to-rest.") (card "Module System & Packages" "use mod.name :open / :as alias / { selective }. Git deps via irij.toml. Pub/private exports. Effect-gated APIs.") (card "Bytecode-only Execution" "irij build emits a self-contained JAR. State-machine handler lowering is the single execution path — no interpreter, no threaded fallback, no ambiguity.") (card "Hot Redef + Java Interop" "REPL-driven fn redefinition via invokedynamic + MutableCallSite. Java classes via Class/member, dot-access, ::: JVM capability tracking.")])
 
 ;; ── Code examples ────────────────────────────────────────────────
 
@@ -306,18 +307,31 @@ fn ex-pipelines
   ])])
 
 fn ex-contracts
-  (-> div {} #[(h3 {} #["Contracts & Laws"]) (code-lines #[
-    "<span class=\"k\">fn</span> withdraw"
+  (-> div {} #[(h3 {} #["Contracts (pre / post / in / out)"]) (code-lines #[
+    "<span class=\"k\">fn</span> withdraw <span class=\"k\">::</span> <span class=\"t\">Account</span> <span class=\"t\">Int</span> <span class=\"t\">Account</span>"
     "  <span class=\"k\">pre</span>  (account amt <span class=\"op\">-></span> amt > <span class=\"n\">0</span>)"
     "  <span class=\"k\">post</span> (result <span class=\"op\">-></span> result.balance >= <span class=\"n\">0</span>)"
     "  (account amt <span class=\"op\">-></span>"
     "    {<span class=\"op\">...</span>account balance<span class=\"op\">=</span> account.balance - amt})"
     ""
-    "<span class=\"k\">proto</span> <span class=\"t\">Monoid</span> a"
-    "  empty <span class=\"k\">::</span> a"
-    "  append <span class=\"k\">::</span> a <span class=\"op\">-></span> a <span class=\"op\">-></span> a"
-    "  <span class=\"k\">law</span> identity <span class=\"op\">=</span> <span class=\"k\">forall</span> x<span class=\"op\">.</span>"
-    "    append empty x <span class=\"op\">==</span> x"
+    "<span class=\"c\">;; Blame-tracking: pre-fail accuses caller,</span>"
+    "<span class=\"c\">;; post-fail accuses the fn itself.</span>"
+  ])])
+
+fn ex-parametric-effects
+  (-> div {} #[(h3 {} #["Parametric Effect Rows"]) (code-lines #[
+    "<span class=\"c\">;; Row-variable `:eff` binds the callback's effects</span>"
+    "<span class=\"c\">;; and propagates them to the caller's effect row.</span>"
+    "<span class=\"k\">fn</span> fold <span class=\"k\">::</span> (<span class=\"t\">Fn</span>)<span class=\"k\">:eff</span> _ <span class=\"t\">Vec</span> _ <span class=\"k\">:::</span> eff"
+    "  (f acc xs <span class=\"op\">-></span> ...)"
+    ""
+    "<span class=\"c\">;; Pure use — no extra row at the call site.</span>"
+    "total := fold (+) <span class=\"n\">0</span> #[<span class=\"n\">1 2 3 4 5</span>]"
+    ""
+    "<span class=\"c\">;; Effectful callback — Console flows in automatically.</span>"
+    "<span class=\"k\">fn</span> shout <span class=\"k\">:::</span> <span class=\"t\">Console</span>"
+    "  _ <span class=\"op\">=></span>"
+    "    fold (n acc <span class=\"op\">-></span> (println n) <span class=\"op\">|></span> (acc<span class=\"op\">+</span>)) <span class=\"n\">0</span> #[<span class=\"n\">1 2 3</span>]"
   ])])
 
 fn ex-concurrency
@@ -381,29 +395,33 @@ fn ex-protocols
 ;; ── Roadmap ──────────────────────────────────────────────────────
 
 fn phase-row
-  (status label desc -> #[(span {class= "st " ++ status} #[(if (status == "done") "done" else "next")]) (span {} #[(strong {} #[label]) (raw (" " ++ desc))])])
+  (status label desc ->
+    #[(span {class= "st " ++ status}
+        #[(if (status == "done") "done"
+           else (if (status == "next") "next" else "planned"))])
+      (span {} #[(strong {} #[label]) (raw (" " ++ desc))])])
 
 fn home-roadmap
-  (-> div (cls "phase") (phase-row "done" "Phase 0-2" "Parser, AST, Interpreter, REPL, CLI" ++
+  (-> div (cls "phase") (phase-row "done" "Phase 0-2" "Parser, AST, REPL, CLI" ++
                          phase-row "done" "Phase 3" "Algebraic effects with deep handlers" ++
                          phase-row "done" "Phase 4" "Module system + standard library" ++
                          phase-row "done" "Phase 5" "Structured concurrency (virtual threads)" ++
-                         phase-row "done" "Phase 6" "Contracts, blame tracking, QuickCheck laws" ++
+                         phase-row "done" "Phase 6" "Contracts, blame tracking" ++
                          phase-row "done" "Phase 7" "Effect row declarations + enforcement" ++
-                         phase-row "done" "Phase 8" "Runtime specs, validation, Arbitrary, lint" ++
+                         phase-row "done" "Phase 8" "Runtime specs, validation, lint" ++
                          phase-row "done" "Phase 9" "Package management (deps.irj, git deps)" ++
                          phase-row "done" "Phase 10" "I/O: JSON, FileIO, HTTP client + server" ++
                          phase-row "done" "Phase 11" "Database effect (SQLite, std.db)" ++
-                         phase-row "done" "Phase 12b" "nREPL Playground (browser sandbox)" ++
-                         phase-row "done" "Phase 12a" "Package Registry (app in Irij)" ++
+                         phase-row "done" "Phase 12" "Package registry app + Playground" ++
                          phase-row "done" "Phase 13" "Java interop (Class/member, dot-access)" ++
-                         phase-row "done" "Phase 14a-c" "Bytecode compiler: threaded + state-machine effects, hot-redef, JVM capability" ++
-                         phase-row "done" "v0.5.0" "Effect-row soundness (compile-time lint, per-ref JVM capability); full bytecode spec parity; pre/post contracts in bytecode" ++
-                         phase-row "done" "v0.5.x" "Bytecode-mode parity for the full irij.online website: SQLite/HTTP/SSE/multipart/JSON/FileIO/sandboxed-interpreter tier ported; Irij source line numbers carried into JVM stack traces" ++
-                         phase-row "done" "v0.6.0" "Parametric effect rows ((Fn):eff / (_ -> Bool):eff / ::: eff); ::: Any hard-removed from user code; multi-line error chains pointing at row-var binding sites" ++
-                         phase-row "done" "v0.6.x" "Interpreter-removal Phases R1-R4: nREPL eval defaults to bytecode + cross-eval fn defs; every builtin emitted in bytecode; irij build defaults to bytecode-sm" ++
-                         phase-row "next" "v0.7.0" "R5: delete dev.irij.interpreter package; std.auth (JWT, sessions); capabilities-style raw-* (Eff/Koka pattern); row-vars on record specs (precise std.serve router); LSP MVP" ++
-                         phase-row "next" "v0.8.0" "std.queue (Redis/SQLite); multi-tenant package registry; GraalVM native image; Handler:Effect specs for dynamic-handler typing" ++
+                         phase-row "done" "Phase 14" "Bytecode compiler: state-machine effects, hot-redef, JVM capability" ++
+                         phase-row "done" "v0.5.0" "Effect-row soundness; full bytecode spec parity; pre/post contracts in bytecode" ++
+                         phase-row "done" "v0.5.x" "Bytecode-mode parity for the full irij.online website; Irij source line numbers in JVM stack traces" ++
+                         phase-row "done" "v0.6.0" "Parametric effect rows ((Fn):eff / (_ -> Bool):eff / ::: eff)" ++
+                         phase-row "done" "v0.6.13" "Interpreter package + threaded handler lowering removed. Single execution model: state-machine bytecode." ++
+                         phase-row "done" "v0.6.15" "Spawn inherits namespace + per-session stdout (Playground cross-eval fn refs + spawn output capture). SM lowering: composed handlers, destructure pre-op binds." ++
+                         phase-row "next" "v0.7.0" "std.auth (JWT, sessions); capabilities-style raw-* (Eff/Koka pattern); row-vars on record specs (precise std.serve router); LSP MVP" ++
+                         phase-row "planned" "v0.8.0" "std.queue (Redis/SQLite); multi-tenant package registry; GraalVM native image; Handler:Effect specs for dynamic-handler typing" ++
                          phase-row "planned" "Future" "Channels (send/recv/select), streams/flows, choreographic programming, refinement types, content-addressed code"))
 
 ;; ── Full home page ───────────────────────────────────────────────
@@ -416,9 +434,10 @@ fn home-page
       (div (cls "section-sep") #[])
       (h2 {} #["Code Examples"])
       (div (cls "two-col") #[(ex-specs-and-matching ()) (ex-effects ())])
-      (div {class= "two-col" style= "margin-top:2rem"} #[(ex-pipelines ()) (ex-contracts ())])
-      (div {class= "two-col" style= "margin-top:2rem"} #[(ex-concurrency ()) (ex-imperative ())])
-      (div {class= "two-col" style= "margin-top:2rem"} #[(ex-collections ()) (ex-protocols ())])
+      (div {class= "two-col" style= "margin-top:2rem"} #[(ex-parametric-effects ()) (ex-contracts ())])
+      (div {class= "two-col" style= "margin-top:2rem"} #[(ex-pipelines ()) (ex-concurrency ())])
+      (div {class= "two-col" style= "margin-top:2rem"} #[(ex-imperative ()) (ex-collections ())])
+      (div {class= "two-col" style= "margin-top:2rem"} #[(ex-protocols ()) (div {} #[])])
       (div (cls "section-sep") #[])
       (h2 {} #["Roadmap"])
       (p {} #["Irij is in active development. Current status:"])
@@ -717,7 +736,7 @@ fn docs-page
         (doc-card "effects" "Effects" "Threaded vs state-machine lowering. Trampoline + lifted locals.")
         (doc-card "tco" "Tail-Call Optimization" "Self-TCO via GOTO + arg rebind. Mutual TCO trade-offs.")
         (doc-card "hot-redef" "Hot Redef" "invokedynamic + MutableCallSite. The --direct-linking deploy mode.")
-        (doc-card "specs" "Specs" "Runtime predicates, contracts, blame, law verification.")
+        (doc-card "specs" "Specs" "Runtime predicates, contracts, blame tracking.")
         (doc-card "modules" "Modules" "mod/use/pub. Inlining, alias rewriting, blame envelopes.")
         (doc-card "concurrency" "Concurrency" "Virtual threads, structured concurrency, cross-mode dispatch.")
         (doc-card "jvm-capability" "JVM Capability" "Why all Java interop requires ::: JVM.")
