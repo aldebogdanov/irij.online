@@ -11,7 +11,7 @@ use std.time :open
 use std.datastar :open
 use std.list :open
 
-irij-version := "v0.6.21"
+irij-version := "v0.7.0"
 
 ;; ═══════════════════════════════════════════════════════════════════
 ;; Seed Registry — Database
@@ -352,13 +352,15 @@ fn ex-imperative
   (-> div {} #[(h3 {} #["Functions"]) (code-lines #[
 
     "<span class=\"c\">;; Three fn body styles:</span>"
-    "<span class=\"k\">fn</span> greet <span class=\"k\">:::</span> <span class=\"t\">Console</span>"           "<span class=\"c\">;; lambda</span>"
+    ""
+    "<span class=\"k\">fn</span> greet <span class=\"k\">:::</span> <span class=\"t\">Console</span>            <span class=\"c\">;; imperative</span>"
     "  <span class=\"op\">=></span> name"
     "  msg := <span class=\"s\">\"Hello, \"</span> <span class=\"op\">++</span> name"
     "  println msg"
     "  msg"
     ""
-    "<span class=\"k\">fn</span> add (x y <span class=\"op\">-></span> x + y)          <span class=\"c\">;; lambda</span>"
+    "<span class=\"k\">fn</span> add (x y <span class=\"op\">-></span> x + y)           <span class=\"c\">;; lambda</span>"
+    ""
     "<span class=\"k\">fn</span> fib"
     "  <span class=\"n\">0</span> <span class=\"op\">=></span> <span class=\"n\">1</span>                        <span class=\"c\">;; match arms</span>"
     "  n <span class=\"op\">=></span> n * fib (n - <span class=\"n\">1</span>)"
