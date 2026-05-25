@@ -34,14 +34,106 @@ fn init-registry-dirs ::: Console FileIO
     fs-mkdir seeds-db-dir
     fs-mkdir seeds-storage-dir
 
+;; ─────────────────────────────────────────────────────────────────
+;; Reserved usernames (v0.8.2c)
+;;
+;; Block-list squatting on infra / core names. Reserved users are
+;; INSERTed with NULL pw_hash so login + token issuance never
+;; succeed against them; they exist solely to own legacy seeds.
+;; ─────────────────────────────────────────────────────────────────
+fn reserved-usernames :: Vec
+  (-> #[
+    "irij"            ;; core team / legacy package owner
+    "online"          ;; site infra
+    "aldebogdanov"    ;; project lead handle, reserved against impersonation
+    "admin" "root" "system" "www" "api" "test" "support"
+  ])
+
 ;; Initialize DB schema
 fn init-registry-db ::: Console
   => conn
   with default-db
-    db-exec conn "CREATE TABLE IF NOT EXISTS packages (name TEXT PRIMARY KEY, owner TEXT NOT NULL, license TEXT, created TEXT DEFAULT (datetime('now')), updated TEXT DEFAULT (datetime('now')))" #[]
+    ;; ── 8.2c: users + tokens FIRST (other tables FK-reference them) ─
+    ;; users.pw_hash is "<salt>$<sha256>" via std.auth.hash-password.
+    ;; NULL pw_hash = reserved username (cannot log in or own tokens).
+    db-exec conn "CREATE TABLE IF NOT EXISTS users (id INTEGER PRIMARY KEY AUTOINCREMENT, username TEXT UNIQUE NOT NULL COLLATE NOCASE, email TEXT UNIQUE COLLATE NOCASE, pw_hash TEXT, created TEXT DEFAULT (datetime('now')))" #[]
+    ;; api_tokens.token_hash is sha256(plaintext_token); plaintext
+    ;; shown to user once at creation, never stored. UNIQUE on
+    ;; the hash gives O(1) lookup at auth-middleware time.
+    db-exec conn "CREATE TABLE IF NOT EXISTS api_tokens (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER NOT NULL REFERENCES users(id), token_hash TEXT UNIQUE NOT NULL, label TEXT, created TEXT DEFAULT (datetime('now')), last_used TEXT)" #[]
+    ;; Seed reserved users (idempotent via INSERT OR IGNORE). Must
+    ;; happen before package backfill so the 'irij' user exists.
+    seed-reserved-users conn
+    ;; ── Package tables ─────────────────────────────────────────
+    ;; Fresh DBs get owner_id directly. Legacy DBs get the column
+    ;; added via the migration step below, then the legacy free-form
+    ;; `owner` TEXT column is dropped (8.2c picked single source of
+    ;; truth: users.username via owner_id FK).
+    db-exec conn "CREATE TABLE IF NOT EXISTS packages (name TEXT PRIMARY KEY, owner_id INTEGER REFERENCES users(id), license TEXT, created TEXT DEFAULT (datetime('now')), updated TEXT DEFAULT (datetime('now')))" #[]
     db-exec conn "CREATE TABLE IF NOT EXISTS versions (id INTEGER PRIMARY KEY AUTOINCREMENT, package_name TEXT NOT NULL REFERENCES packages(name), version TEXT NOT NULL, description TEXT, readme TEXT, author TEXT NOT NULL, checksum TEXT, published TEXT DEFAULT (datetime('now')), UNIQUE(package_name, version))" #[]
     db-exec conn "CREATE TABLE IF NOT EXISTS version_deps (id INTEGER PRIMARY KEY AUTOINCREMENT, version_id INTEGER NOT NULL REFERENCES versions(id), dep_name TEXT NOT NULL, dep_type TEXT NOT NULL CHECK(dep_type IN ('registry', 'git')), dep_version TEXT, git_url TEXT, git_ref TEXT)" #[]
+    ;; Legacy migration: ALTER ADD owner_id when an old DB created
+    ;; the table without it; then backfill nulls to 'irij'; then
+    ;; drop the legacy free-form owner column.
+    add-owner-id-column-if-missing conn
+    backfill-package-owners conn
+    drop-legacy-owner-column-if-present conn
   println "Registry DB initialized"
+
+;; SQLite has no "ADD COLUMN IF NOT EXISTS"; probe via PRAGMA and
+;; ALTER only when absent. Keeps the boot path crash-free across
+;; fresh DB + already-migrated DB.
+fn add-owner-id-column-if-missing ::: Db Console
+  => conn
+  cols := db-query conn "PRAGMA table_info(packages)" #[]
+  has-col? := fold (acc col -> acc || (col.name == "owner_id")) false cols
+  if has-col?
+    ()
+  else
+    db-exec conn "ALTER TABLE packages ADD COLUMN owner_id INTEGER REFERENCES users(id)" #[]
+
+;; Insert every reserved username with NULL pw_hash. INSERT OR
+;; IGNORE deduplicates so subsequent boots are no-ops. Done via
+;; tail recursion since the single-expression lambda body in
+;; `fold` can't carry both the side-effect and the accumulator.
+fn seed-reserved-users ::: Db Console
+  => conn
+  insert-reserved-users conn (reserved-usernames ())
+
+fn insert-reserved-users ::: Db Console
+  => conn names
+  if (empty? names)
+    ()
+  else
+    uname := head names
+    db-exec conn "INSERT OR IGNORE INTO users (username, pw_hash) VALUES (?, NULL)" #[uname]
+    insert-reserved-users conn (tail names)
+
+;; Backfill: every package with NULL owner_id gets re-attributed
+;; to the reserved 'irij' user. Pre-8.2c data is single-tenant so
+;; this is the only reasonable owner; users who later claim a
+;; package they actually wrote can do so via admin support.
+fn backfill-package-owners ::: Db Console
+  => conn
+  rows := db-query conn "SELECT id FROM users WHERE username = 'irij'" #[]
+  if (empty? rows)
+    println "Warning: 'irij' reserved user missing; skip package backfill"
+  else
+    irij-id := (head rows).id
+    db-exec conn "UPDATE packages SET owner_id = ? WHERE owner_id IS NULL" #[irij-id]
+
+;; Drop the legacy free-form `owner` TEXT column once owner_id is
+;; the single source of truth. SQLite 3.35+ supports DROP COLUMN
+;; natively. Probe via PRAGMA so this is idempotent across reboots
+;; and never fires on fresh DBs (which never had the column).
+fn drop-legacy-owner-column-if-present ::: Db Console
+  => conn
+  cols := db-query conn "PRAGMA table_info(packages)" #[]
+  has-legacy? := fold (acc col -> acc || (col.name == "owner")) false cols
+  if has-legacy?
+    db-exec conn "ALTER TABLE packages DROP COLUMN owner" #[]
+  else
+    ()
 
 ;; Boot registry
 ;;
@@ -617,7 +709,7 @@ fn seed-detail-page
   segments := path-segments request.path "/seeds"
   name := head segments
   with default-db
-    pkg := db-query registry-db "SELECT name, owner, license, created FROM packages WHERE name = ?" #[name]
+    pkg := db-query registry-db "SELECT p.name, u.username AS owner, p.license, p.created FROM packages p JOIN users u ON u.id = p.owner_id WHERE p.name = ?" #[name]
     if (empty? pkg)
       html ~ layout "Not Found" "/seeds" #[(h2 {} #["Seed Not Found"]) (p {} #[("No seed named '" ++ name ++ "' exists.")])]
     else
@@ -677,7 +769,11 @@ fn do-publish ::: FileIO Serve
     if (empty? existing == false)
       json-response (json-encode ({error= (name ++ " " ++ version ++ " already published")}))
     else
-      db-exec registry-db "INSERT INTO packages (name, owner, license, updated) VALUES (?, ?, ?, datetime('now')) ON CONFLICT(name) DO UPDATE SET license = excluded.license, updated = datetime('now')" #[name author license]
+      ;; owner_id resolves to the 'irij' reserved user for now;
+      ;; 8.2d's authenticated publish will substitute the caller's
+      ;; user id here. License + updated_at still get refreshed on
+      ;; UPSERT; the publisher's name lives in versions.author.
+      db-exec registry-db "INSERT INTO packages (name, owner_id, license, updated) VALUES (?, (SELECT id FROM users WHERE username = 'irij'), ?, datetime('now')) ON CONFLICT(name) DO UPDATE SET license = excluded.license, updated = datetime('now')" #[name license]
       db-exec registry-db "INSERT INTO versions (package_name, version, description, readme, author) VALUES (?, ?, ?, ?, ?)" #[name version description "" author]
       json-response (json-encode ({ok= true name= name version= version}))
 
@@ -685,10 +781,10 @@ fn do-publish ::: FileIO Serve
 fn compose-query-data
   => q
   if (q == () || q == "")
-    #["SELECT p.name, p.owner, p.license, v.version, v.description, v.published FROM packages p JOIN versions v ON v.package_name = p.name AND v.id = (SELECT MAX(id) FROM versions WHERE package_name = p.name) ORDER BY p.updated DESC" #[]]
+    #["SELECT p.name, u.username AS owner, p.license, v.version, v.description, v.published FROM packages p JOIN users u ON u.id = p.owner_id JOIN versions v ON v.package_name = p.name AND v.id = (SELECT MAX(id) FROM versions WHERE package_name = p.name) ORDER BY p.updated DESC" #[]]
   else
     pattern := "%" ++ q ++ "%"
-    #["SELECT p.name, p.owner, p.license, v.version, v.description, v.published FROM packages p JOIN versions v ON v.package_name = p.name AND v.id = (SELECT MAX(id) FROM versions WHERE package_name = p.name) WHERE p.name LIKE ? OR v.description LIKE ? OR v.author LIKE ? ORDER BY CASE WHEN p.name = ? THEN 0 WHEN p.name LIKE ? THEN 1 ELSE 2 END, p.updated DESC" #[pattern pattern pattern q (q ++ "%")]]
+    #["SELECT p.name, u.username AS owner, p.license, v.version, v.description, v.published FROM packages p JOIN users u ON u.id = p.owner_id JOIN versions v ON v.package_name = p.name AND v.id = (SELECT MAX(id) FROM versions WHERE package_name = p.name) WHERE p.name LIKE ? OR v.description LIKE ? OR v.author LIKE ? ORDER BY CASE WHEN p.name = ? THEN 0 WHEN p.name LIKE ? THEN 1 ELSE 2 END, p.updated DESC" #[pattern pattern pattern q (q ++ "%")]]
 
 fn perform-db-query
   => q
@@ -737,7 +833,7 @@ fn handle-seed-route ::: FileIO Serve
 fn handle-seed-detail
   => name
   with default-db
-    pkg := db-query registry-db "SELECT name, owner, license, created FROM packages WHERE name = ?" #[name]
+    pkg := db-query registry-db "SELECT p.name, u.username AS owner, p.license, p.created FROM packages p JOIN users u ON u.id = p.owner_id WHERE p.name = ?" #[name]
     if (empty? pkg)
       {status= 404 body= (json-encode ({error= "Seed not found"})) headers= (assoc {} "content-type" "application/json")}
     else
