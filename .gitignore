@@ -8,3 +8,17 @@
 # MemPalace per-project files (issue #185)
 mempalace.yaml
 entities.json
+
+# Build artifacts
+build/
+*.jar
+
+# Runtime data (registry DB + seed tarballs are server state, not source)
+data/
+
+# Tooling
+.nrepl-port
+
+# Nix flake (local dev only; not part of the deploy)
+flake.nix
+flake.lock

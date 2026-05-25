@@ -11,7 +11,7 @@ use std.time :open
 use std.datastar :open
 use std.list :open
 
-irij-version := "v0.7.0"
+irij-version := "v0.8.1"
 
 ;; ═══════════════════════════════════════════════════════════════════
 ;; Seed Registry — Database
@@ -26,10 +26,13 @@ seeds-db-path := seeds-db-dir ++ "/registry.db"
 seeds-storage-dir := workdir ++ "/seeds"
 
 ;; Ensure data dirs exist
+use std.fs :open
+
 fn init-registry-dirs ::: Console FileIO
   => _
-  make-dir seeds-db-dir
-  make-dir seeds-storage-dir
+  with default-fs
+    fs-mkdir seeds-db-dir
+    fs-mkdir seeds-storage-dir
 
 ;; Initialize DB schema
 fn init-registry-db ::: Console
@@ -41,9 +44,23 @@ fn init-registry-db ::: Console
   println "Registry DB initialized"
 
 ;; Boot registry
+;;
+;; db-open is now an effect op (Irij 0.7.x cap migration), so it
+;; needs a Db handler in scope. Bootstrap inside a one-shot
+;; `with default-db` block; downstream request handlers each open
+;; their own `with default-db` frame as before. We use a `mut`
+;; placeholder so the connection lives at top level after the
+;; bootstrap block exits.
+fn open-registry-db ::: Db Console
+  =>
+  conn := db-open seeds-db-path
+  init-registry-db conn
+  conn
+
 init-registry-dirs ()
-registry-db := db-open seeds-db-path
-init-registry-db registry-db
+registry-db :! ()
+with default-db
+  registry-db <- open-registry-db ()
 
 ;; ═══════════════════════════════════════════════════════════════════
 ;; CSS
@@ -424,9 +441,12 @@ fn home-roadmap
                          phase-row "done" "v0.6.0" "Parametric effect rows ((Fn):eff / (_ -> Bool):eff / ::: eff)" ++
                          phase-row "done" "v0.6.13" "Interpreter package + threaded handler lowering removed. Single execution model: state-machine bytecode." ++
                          phase-row "done" "v0.6.15" "Spawn inherits namespace + per-session stdout (Playground cross-eval fn refs + spawn output capture). SM lowering: composed handlers, destructure pre-op binds." ++
-                         phase-row "next" "v0.7.0" "std.auth (JWT, sessions); capabilities-style raw-* (Eff/Koka pattern); row-vars on record specs (precise std.serve router); LSP MVP" ++
-                         phase-row "planned" "v0.8.0" "std.queue (Redis/SQLite); multi-tenant package registry; GraalVM native image; Handler:Effect specs for dynamic-handler typing" ++
-                         phase-row "planned" "Future" "Channels (send/recv/select), streams/flows, choreographic programming, refinement types, content-addressed code"))
+                         phase-row "done" "v0.7.0" "std.auth seed (sha256, hmac, random-token); SM-lowering correctness gaps closed; dev.irij.interpreter renamed to dev.irij.runtime; release auto-tag" ++
+                         phase-row "done" "v0.7.1" "Capabilities replace raw-* surface (Db, Http, Serve, FileIO, Session); Irij-record caps; named record specs with row params; inline `with do …`; LSP MVP (irij lsp)" ++
+                         phase-row "done" "v0.8.0" "Handler:Effect specs (first-class handler values, dynamic-handler typing); LSP 2b.1 (symbol-aware hover, goto-def, identifier completion, effect-row diagnostics)" ++
+                         phase-row "done" "v0.8.1" "Per-request HTTP handlers inherit caller's effect stack (SSE / multipart now work); `try` traps every Throwable (division by zero, casts, NPEs); GraalVM deferred to techdebt" ++
+                         phase-row "next" "v0.8.2" "std.queue (Redis/SQLite); multi-tenant package registry" ++
+                         phase-row "planned" "Future" "Linear types (capability + channel safety); channels (send/recv/select); streams/flows; choreographic programming; refinement types; content-addressed code; GraalVM native image"))
 
 ;; ── Full home page ───────────────────────────────────────────────
 
@@ -479,41 +499,63 @@ fn playground-page
 ;; Playground Session API + examples
 ;; ═══════════════════════════════════════════════════════════════════
 
+use std.session :open
+
 ;; POST /api/session — create a new persistent sandbox session
+fn create-session-id ::: Session
+  =>
+  with default-session
+    session-create ()
+
 fn handle-session-create ::: Session
-  (_ -> json-response (json-encode ({id= (raw-session-create ())})))
+  (_ -> json-response (json-encode ({id= (create-session-id ())})))
 
 ;; POST /api/session/eval — eval code in a persistent session
+fn session-eval-body ::: Session Time
+  => request
+  data := json-parse request.body
+  id := get "id" data
+  code := get "code" data
+  t0 := time-now ()
+  result := session-eval id code 10000
+  elapsed := (time-now ()) - t0
+  json-response (json-encode ({value= (get "value" result) stdout= (get "stdout" result) error= (get "error" result) ok= (get "ok" result) elapsed= elapsed}))
+
 fn handle-session-eval-helper ::: Session
   => request
   with default-time
-    data := json-parse request.body
-    id := get "id" data
-    code := get "code" data
-    t0 := time-now ()
-    result := raw-session-eval id code 10000
-    elapsed := (time-now ()) - t0
-    json-response (json-encode ({value= (get "value" result) stdout= (get "stdout" result) error= (get "error" result) ok= (get "ok" result) elapsed= elapsed}))
+    with default-session
+      session-eval-body request
 
 fn handle-session-eval ::: Session
   (request -> handle-session-eval-helper request)
 
 ;; POST /api/session/destroy — destroy a session
-fn handle-session-destroy ::: Session
+fn session-destroy-body ::: Session
   => request
   data := json-parse request.body
-  raw-session-destroy (get "id" data)
+  session-destroy (get "id" data)
   json-response (json-encode ({ok= true}))
 
+fn handle-session-destroy ::: Session
+  => request
+  with default-session
+    session-destroy-body request
+
 ;; GET /api/session/stream?id=xxx — SSE stream of session output
-fn handle-session-stream ::: Serve Session
+fn session-stream-body ::: Serve Session
   => request
   q := request.query
   parts := split q "="
   id := last parts
-  sse := raw-sse-response request
-  raw-session-subscribe id sse
+  sse := sse-response request
+  session-subscribe id sse
   sse
+
+fn handle-session-stream ::: Serve Session
+  => request
+  with default-session
+    session-stream-body request
 
 fn parse-query
   => q
@@ -609,9 +651,9 @@ fn render-version-item
 ;; ═══════════════════════════════════════════════════════════════════
 
 ;; POST /api/seeds/publish — publish a seed (multipart: metadata JSON + tarball)
-fn handle-seed-publish ::: FileIO
+fn handle-seed-publish ::: FileIO Serve
   => request
-  meta-json := raw-multipart-field request "metadata"
+  meta-json := multipart-field request "metadata"
   meta := json-parse meta-json
   name := get "name" meta
   version := get "version" meta
@@ -623,12 +665,13 @@ fn handle-seed-publish ::: FileIO
   else
     do-publish request name version author description license
 
-fn do-publish ::: FileIO
+fn do-publish ::: FileIO Serve
   => request name version author description license
   tarball-dir := seeds-storage-dir ++ "/" ++ name
-  make-dir tarball-dir
+  with default-fs
+    fs-mkdir tarball-dir
   tarball-path := tarball-dir ++ "/" ++ version ++ ".tar.gz"
-  raw-multipart-save request "tarball" tarball-path
+  multipart-save request "tarball" tarball-path
   with default-db
     existing := db-query registry-db "SELECT id FROM versions WHERE package_name = ? AND version = ?" #[name version]
     if (empty? existing == false)
@@ -704,7 +747,8 @@ fn handle-seed-detail
 fn handle-seed-download ::: FileIO
   => name version
   tarball-path := seeds-storage-dir ++ "/" ++ name ++ "/" ++ version ++ ".tar.gz"
-  if (file-exists? tarball-path)
+  exists := with default-fs do (fs-exists? tarball-path)
+  if exists
     {status= 200 file= tarball-path headers= (assoc (assoc {} "content-type" "application/gzip") "content-disposition" ("attachment; filename=" ++ name ++ "-" ++ version ++ ".tar.gz"))}
   else
     {status= 404 body= (json-encode ({error= "Tarball not found"})) headers= (assoc {} "content-type" "application/json")}
