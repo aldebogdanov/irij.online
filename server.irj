@@ -12,6 +12,7 @@ use std.datastar :open
 use std.list :open
 use std.auth :open
 use std.random :open
+use std.convert :open
 
 irij-version := "v0.8.1"
 
@@ -748,39 +749,108 @@ fn render-version-item
 ;; ═══════════════════════════════════════════════════════════════════
 
 ;; POST /api/seeds/publish — publish a seed (multipart: metadata JSON + tarball)
-fn handle-seed-publish ::: FileIO Serve
+;; Requires Authorization: Bearer <token> header. Token resolves to a
+;; user; ownership of the package gets set/checked on that user.
+
+fn user-by-bearer ::: Db
+  => hdr
+  if (hdr == () || hdr == "")
+    {}
+  else
+    user-by-bearer-nonempty hdr
+
+fn user-by-bearer-nonempty ::: Db
+  => hdr
+  if (starts-with? hdr "Bearer ")
+    bearer-resolve hdr
+  else
+    {}
+
+fn bearer-resolve ::: Db
+  => hdr
+  user-by-token-hash (sha256-hex (substring hdr 7 (length hdr)))
+
+fn user-by-token-hash ::: Db
+  => hashed
+  rows-first-or-empty (lookup-token-rows hashed)
+
+fn lookup-token-rows ::: Db
+  => hashed
+  with default-db
+    db-query registry-db "SELECT u.id, u.username FROM users u JOIN api_tokens t ON t.user_id = u.id WHERE t.token_hash = ?" #[hashed]
+
+fn unauthorized-publish :: Map
+  (-> {status= 401
+       body= "Unauthorized — missing or invalid Bearer token. Create one at /dashboard."
+       headers= (assoc {} "content-type" "application/json")})
+
+fn handle-seed-publish ::: Db FileIO Serve
   => request
+  caller := user-by-bearer (get "authorization" request.headers)
+  if (empty? caller)
+    unauthorized-publish ()
+  else
+    publish-validate request caller
+
+fn publish-validate ::: Db FileIO Serve
+  => request caller
   meta-json := multipart-field request "metadata"
   meta := json-parse meta-json
   name := get "name" meta
   version := get "version" meta
-  author := get "author" meta
   description := get "description" meta
   license := get "license" meta
-  if (name == "" || version == "" || author == "" || description == "")
-    json-response (json-encode ({error= "Missing required fields: name, version, author, description"}))
+  if (name == "" || version == "" || description == "")
+    json-response (json-encode ({error= "Missing required fields: name, version, description"}))
   else
-    do-publish request name version author description license
+    publish-check-owner request caller name version description license
 
-fn do-publish ::: FileIO Serve
-  => request name version author description license
+fn publish-check-owner ::: Db FileIO Serve
+  => request caller name version description license
+  owner-rows := lookup-pkg-owner name
+  if (owner-not-mine? owner-rows (get "id" caller))
+    {status= 403
+     body= (json-encode ({error= ("Package '" ++ name ++ "' is owned by another user.")}))
+     headers= (assoc {} "content-type" "application/json")}
+  else
+    do-publish request name version (get "username" caller) description license (get "id" caller)
+
+fn lookup-pkg-owner ::: Db
+  => name
+  with default-db
+    db-query registry-db "SELECT owner_id FROM packages WHERE name = ?" #[name]
+
+fn owner-not-mine? :: _ _ Bool
+  => owner-rows caller-id
+  if (empty? owner-rows)
+    false
+  else
+    (get "owner_id" (head owner-rows)) /= caller-id
+
+fn do-publish ::: FileIO Serve Db
+  => request name version author description license caller-id
   tarball-dir := seeds-storage-dir ++ "/" ++ name
   with default-fs
     fs-mkdir tarball-dir
   tarball-path := tarball-dir ++ "/" ++ version ++ ".tar.gz"
   multipart-save request "tarball" tarball-path
+  version-exists := lookup-version name version
+  if (empty? version-exists == false)
+    json-response (json-encode ({error= (name ++ " " ++ version ++ " already published")}))
+  else
+    publish-write-rows name version author description license caller-id
+
+fn lookup-version ::: Db
+  => name version
   with default-db
-    existing := db-query registry-db "SELECT id FROM versions WHERE package_name = ? AND version = ?" #[name version]
-    if (empty? existing == false)
-      json-response (json-encode ({error= (name ++ " " ++ version ++ " already published")}))
-    else
-      ;; owner_id resolves to the 'irij' reserved user for now;
-      ;; 8.2d's authenticated publish will substitute the caller's
-      ;; user id here. License + updated_at still get refreshed on
-      ;; UPSERT; the publisher's name lives in versions.author.
-      db-exec registry-db "INSERT INTO packages (name, owner_id, license, updated) VALUES (?, (SELECT id FROM users WHERE username = 'irij'), ?, datetime('now')) ON CONFLICT(name) DO UPDATE SET license = excluded.license, updated = datetime('now')" #[name license]
-      db-exec registry-db "INSERT INTO versions (package_name, version, description, readme, author) VALUES (?, ?, ?, ?, ?)" #[name version description "" author]
-      json-response (json-encode ({ok= true name= name version= version}))
+    db-query registry-db "SELECT id FROM versions WHERE package_name = ? AND version = ?" #[name version]
+
+fn publish-write-rows ::: Db FileIO Serve
+  => name version author description license caller-id
+  with default-db
+    db-exec registry-db "INSERT INTO packages (name, owner_id, license, updated) VALUES (?, ?, ?, datetime('now')) ON CONFLICT(name) DO UPDATE SET license = excluded.license, updated = datetime('now')" #[name caller-id license]
+    db-exec registry-db "INSERT INTO versions (package_name, version, description, readme, author) VALUES (?, ?, ?, ?, ?)" #[name version description "" author]
+    json-response (json-encode ({ok= true name= name version= version}))
 
 ;; GET /api/seeds — list/search seeds
 fn compose-query-data
@@ -928,7 +998,7 @@ fn add-cookie-pair :: Map Str Map
   else
     acc
 
-fn parse-cookies :: Str Map
+fn parse-cookies :: _ Map
   => header
   if (header == () || header == "")
     {}
@@ -943,7 +1013,7 @@ fn add-form-pair :: Map Str Map
   else
     acc
 
-fn parse-form-body :: Str Map
+fn parse-form-body :: _ Map
   => body
   if (body == () || body == "")
     {}
@@ -959,7 +1029,12 @@ fn find-user-by-session ::: Db
 
 fn lookup-user-by-session-hash ::: Db
   => conn hashed
-  rows := db-query conn "SELECT u.id, u.username, u.email FROM users u JOIN web_sessions s ON s.user_id = u.id WHERE s.token_hash = ? AND s.expires > datetime('now')" #[hashed]
+  with default-db
+    rows := db-query conn "SELECT u.id, u.username, u.email FROM users u JOIN web_sessions s ON s.user_id = u.id WHERE s.token_hash = ? AND s.expires > datetime('now')" #[hashed]
+    rows-first-or-empty rows
+
+fn rows-first-or-empty
+  => rows
   if (empty? rows)
     {}
   else
@@ -1128,6 +1203,141 @@ fn handle-logout ::: Db FileIO Serve
    headers= {location= "/"
              set-cookie= "irij_session=; HttpOnly; SameSite=Lax; Path=/; Max-Age=0"}}
 
+;; ── Dashboard + token mgmt ───────────────────────────────────────
+
+fn redirect-login :: Map
+  (-> {status= 302 body= "" headers= {location= "/login"}})
+
+fn user-packages ::: Db
+  => user-id
+  with default-db
+    db-query registry-db "SELECT name, license FROM packages WHERE owner_id = ? ORDER BY updated DESC" #[user-id]
+
+fn user-tokens ::: Db
+  => user-id
+  with default-db
+    db-query registry-db "SELECT id, label, created, last_used FROM api_tokens WHERE user_id = ? ORDER BY id DESC" #[user-id]
+
+fn pkg-row-el
+  => p
+  (div {style= "padding:.5rem 0;border-bottom:1px solid var(--border)"} #[
+    (a {href= ("/seeds/" ++ (get "name" p))} #[(get "name" p)])
+    (span {style= "color:var(--muted);margin-left:.5rem"} #[(get "license" p)])])
+
+fn token-row-el
+  => t
+  (div {style= "padding:.5rem 0;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center"} #[
+    (span {} #[(get "label" t)])
+    (span {style= "color:var(--muted);font-size:.85rem"} #[("created " ++ (get "created" t))])
+    (el "form" {action= "/api/tokens/delete" method= "POST" style= "display:inline"} #[
+      (el "input" {type= "hidden" name= "id" value= (to-str (get "id" t))} #[])
+      (el "button" {type= "submit" style= "background:none;border:none;color:var(--color-error);cursor:pointer"} #["Revoke"])])])
+
+fn packages-block
+  => packages
+  if (empty? packages)
+    (div {style= "color:var(--muted)"} #["No packages yet — publish one with " (code {} #["irij publish"])])
+  else
+    (div {} (packages |> @ pkg-row-el))
+
+fn tokens-block
+  => tokens
+  if (empty? tokens)
+    (div {style= "color:var(--muted)"} #["No tokens yet."])
+  else
+    (div {} (tokens |> @ token-row-el))
+
+fn new-token-banner
+  => token
+  if (token == () || token == "")
+    (span {} #[])
+  else
+    (div {style= "background:#fff3cd;border:1px solid #ffc107;padding:1rem;border-radius:.4rem;margin-bottom:1rem"} #[
+      (p {style= "margin:0 0 .5rem;font-weight:600"} #["New token created — copy it now, it won't be shown again:"])
+      (code {style= "display:block;padding:.5rem;background:var(--code-bg);border-radius:.3rem;word-break:break-all"} #[token])])
+
+fn dashboard-body
+  => user packages tokens new-token
+  #[(new-token-banner new-token)
+    (h2 {} #[("Welcome, " ++ (get "username" user))])
+    (h3 {} #["Your packages"])
+    (packages-block packages)
+    (h3 {style= "margin-top:2rem"} #["API tokens"])
+    (tokens-block tokens)
+    (el "form" {action= "/api/tokens" method= "POST" style= "margin-top:1rem;display:flex;gap:.5rem"} #[
+      (el "input" {type= "text" name= "label" placeholder= "Token label (e.g. laptop)" required= "required" style= "flex:1;padding:.4rem"} #[])
+      (el "button" {type= "submit" style= "padding:.4rem 1rem;background:var(--accent);color:#fff;border:none;border-radius:.3rem;cursor:pointer"} #["Create token"])])
+    (el "form" {action= "/logout" method= "POST" style= "margin-top:2rem"} #[
+      (el "button" {type= "submit" style= "background:none;border:1px solid var(--border);padding:.4rem 1rem;border-radius:.3rem;cursor:pointer"} #["Log out"])])]
+
+fn dashboard-for-user ::: Db FileIO Serve
+  => user new-token
+  packages := user-packages (get "id" user)
+  tokens := user-tokens (get "id" user)
+  html ~ layout "Dashboard" "/dashboard" (dashboard-body user packages tokens new-token)
+
+fn dashboard-page ::: Db FileIO Serve
+  => request
+  user := current-user request
+  if (empty? user)
+    redirect-login ()
+  else
+    dashboard-for-user user (get "token" (parse-form-body request.query))
+
+;; ── Token CRUD ───────────────────────────────────────────────────
+
+fn token-create-write ::: Db Random FileIO Serve
+  => user-id label
+  with default-db
+    with default-random
+      token := new-session-token ()
+      hashed := sha256-hex token
+      db-exec registry-db "INSERT INTO api_tokens (user_id, token_hash, label) VALUES (?, ?, ?)" #[user-id hashed label]
+      {status= 302 body= "" headers= {location= ("/dashboard?token=" ++ token)}}
+
+fn handle-token-create ::: Db Random FileIO Serve
+  => request
+  user := current-user request
+  if (empty? user)
+    redirect-login ()
+  else
+    token-create-resolve user (parse-form-body request.body)
+
+fn token-create-resolve ::: Db Random FileIO Serve
+  => user form
+  label-raw := get "label" form
+  label := pick-or-empty label-raw
+  token-create-write (get "id" user) (default-label label)
+
+fn default-label :: Str Str
+  => raw
+  if (raw == "")
+    "unnamed"
+  else
+    raw
+
+fn handle-token-delete ::: Db FileIO Serve
+  => request
+  user := current-user request
+  if (empty? user)
+    redirect-login ()
+  else
+    token-delete-do user (parse-form-body request.body)
+
+fn token-delete-do ::: Db FileIO Serve
+  => user form
+  id-raw := get "id" form
+  if (id-raw == () || id-raw == "")
+    {status= 302 body= "" headers= {location= "/dashboard"}}
+  else
+    token-delete-write (get "id" user) (to-int id-raw)
+
+fn token-delete-write ::: Db FileIO Serve
+  => user-id token-id
+  with default-db
+    db-exec registry-db "DELETE FROM api_tokens WHERE id = ? AND user_id = ?" #[token-id user-id]
+    {status= 302 body= "" headers= {location= "/dashboard"}}
+
 
 fn handle-signup ::: Db Random FileIO Serve
   => request
@@ -1161,6 +1371,9 @@ routes := #[
   (route "GET" "/login" login-page)
   (route "POST" "/login" handle-login)
   (route "POST" "/logout" handle-logout)
+  (route "GET" "/dashboard" dashboard-page)
+  (route "POST" "/api/tokens" handle-token-create)
+  (route "POST" "/api/tokens/delete" handle-token-delete)
 ]
 
 with default-serve
