@@ -10,6 +10,8 @@ use std.db :open
 use std.time :open
 use std.datastar :open
 use std.list :open
+use std.auth :open
+use std.random :open
 
 irij-version := "v0.8.1"
 
@@ -61,6 +63,9 @@ fn init-registry-db ::: Console
     ;; shown to user once at creation, never stored. UNIQUE on
     ;; the hash gives O(1) lookup at auth-middleware time.
     db-exec conn "CREATE TABLE IF NOT EXISTS api_tokens (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER NOT NULL REFERENCES users(id), token_hash TEXT UNIQUE NOT NULL, label TEXT, created TEXT DEFAULT (datetime('now')), last_used TEXT)" #[]
+    ;; web_sessions: cookie-backed auth. token_hash = sha256 of
+    ;; plaintext cookie value. Plaintext never stored.
+    db-exec conn "CREATE TABLE IF NOT EXISTS web_sessions (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER NOT NULL REFERENCES users(id), token_hash TEXT UNIQUE NOT NULL, created TEXT DEFAULT (datetime('now')), expires TEXT NOT NULL)" #[]
     ;; Seed reserved users (idempotent via INSERT OR IGNORE). Must
     ;; happen before package backfill so the 'irij' user exists.
     seed-reserved-users conn
@@ -903,6 +908,238 @@ fn doc-detail-page
       (h2 {id= "doc-title"} #["Loading…"])
       (div {id= "doc-content" class= "doc-md"} #[(p {} #["Loading…"])])])
 
+;; ═══════════════════════════════════════════════════════════════════
+;; v0.8.2d — Auth helpers
+;; ═══════════════════════════════════════════════════════════════════
+
+fn strip-leading-space :: Str Str
+  => s
+  if (starts-with? s " ")
+    substring s 1 (length s)
+  else
+    s
+
+fn add-cookie-pair :: Map Str Map
+  => acc pair
+  trimmed := strip-leading-space pair
+  parts := split trimmed "="
+  if ((length parts) >= 2)
+    assoc acc (head parts) (last parts)
+  else
+    acc
+
+fn parse-cookies :: Str Map
+  => header
+  if (header == () || header == "")
+    {}
+  else
+    fold add-cookie-pair {} (split header ";")
+
+fn add-form-pair :: Map Str Map
+  => acc pair
+  parts := split pair "="
+  if ((length parts) >= 2)
+    assoc acc (head parts) (url-decode (last parts))
+  else
+    acc
+
+fn parse-form-body :: Str Map
+  => body
+  if (body == () || body == "")
+    {}
+  else
+    fold add-form-pair {} (split body "&")
+
+fn find-user-by-session ::: Db
+  => conn token
+  if (token == () || token == "")
+    {}
+  else
+    lookup-user-by-session-hash conn (sha256-hex token)
+
+fn lookup-user-by-session-hash ::: Db
+  => conn hashed
+  rows := db-query conn "SELECT u.id, u.username, u.email FROM users u JOIN web_sessions s ON s.user_id = u.id WHERE s.token_hash = ? AND s.expires > datetime('now')" #[hashed]
+  if (empty? rows)
+    {}
+  else
+    head rows
+
+fn current-user ::: Db
+  => request
+  cookies := parse-cookies (get "cookie" request.headers)
+  find-user-by-session registry-db (get "irij_session" cookies)
+
+fn make-web-session ::: Db Random
+  => user-id
+  token := new-session-token ()
+  hashed := sha256-hex token
+  db-exec registry-db "INSERT INTO web_sessions (user_id, token_hash, expires) VALUES (?, ?, datetime('now', '+30 days'))" #[user-id hashed]
+  token
+
+;; ── Auth pages ───────────────────────────────────────────────────
+
+fn signup-page-with-err
+  => err
+  html ~ layout "Sign Up" "/signup" #[
+    (h2 {} #["Create your Irij account"])
+    (auth-banner err)
+    (el "form" {action= "/signup" method= "POST" style= "max-width:420px;display:flex;flex-direction:column;gap:.75rem"} #[
+      (div {} #[(el "label" {} #["Username"]) (el "input" {type= "text" name= "username" required= "required"} #[])])
+      (div {} #[(el "label" {} #["Email (optional)"]) (el "input" {type= "email" name= "email"} #[])])
+      (div {} #[(el "label" {} #["Password"]) (el "input" {type= "password" name= "password" required= "required" minlength= "8"} #[])])
+      (el "button" {type= "submit" style= "padding:.6rem 1rem;background:var(--accent);color:#fff;border:none;border-radius:.4rem;cursor:pointer"} #["Create account"])
+      (p {style= "color:var(--muted);font-size:.9rem"} #["Already have one? " (a {href= "/login"} #["Log in"])])])]
+
+fn auth-banner
+  => err
+  if (err == () || err == "")
+    (span {} #[])
+  else
+    (div {style= "background:#fee;border:1px solid var(--color-error);color:var(--color-error);padding:.75rem 1rem;border-radius:.4rem;margin-bottom:1rem"} #[err])
+
+fn signup-page
+  => request
+  signup-page-with-err ""
+
+;; ── POST /signup handler ─────────────────────────────────────────
+
+fn pick-or-empty :: _ Str
+  => raw
+  if (raw == "" || raw == ())
+    ""
+  else
+    raw
+
+fn signup-write ::: Db Random FileIO Serve
+  => username email password
+  with default-db
+    with default-random
+      salt := new-salt ()
+      pw-hash := hash-password salt password
+      db-exec registry-db "INSERT INTO users (username, email, pw_hash) VALUES (?, ?, ?)" #[username email pw-hash]
+      new-user := head (db-query registry-db "SELECT id FROM users WHERE username = ?" #[username])
+      token := make-web-session new-user.id
+      {status= 302
+       body= ""
+       headers= {location= "/"
+                 set-cookie= ("irij_session=" ++ token ++ "; HttpOnly; SameSite=Lax; Path=/; Max-Age=2592000")}}
+
+fn user-exists? ::: Db
+  => username
+  with default-db
+    rows := db-query registry-db "SELECT id FROM users WHERE username = ?" #[username]
+    empty? rows == false
+
+fn signup-check-uniq ::: Db Random FileIO Serve
+  => username email password
+  if (user-exists? username)
+    signup-page-with-err "That username is taken."
+  else
+    signup-write username email password
+
+fn signup-check-pw ::: Db Random FileIO Serve
+  => username email password
+  if ((length password) < 8)
+    signup-page-with-err "Password must be at least 8 characters."
+  else
+    signup-check-uniq username email password
+
+;; ── Login + logout ───────────────────────────────────────────────
+
+fn login-page-with-err
+  => err
+  html ~ layout "Log In" "/login" #[
+    (h2 {} #["Log in"])
+    (auth-banner err)
+    (el "form" {action= "/login" method= "POST" style= "max-width:420px;display:flex;flex-direction:column;gap:.75rem"} #[
+      (div {} #[(el "label" {} #["Username"]) (el "input" {type= "text" name= "username" required= "required"} #[])])
+      (div {} #[(el "label" {} #["Password"]) (el "input" {type= "password" name= "password" required= "required"} #[])])
+      (el "button" {type= "submit" style= "padding:.6rem 1rem;background:var(--accent);color:#fff;border:none;border-radius:.4rem;cursor:pointer"} #["Log in"])
+      (p {style= "color:var(--muted);font-size:.9rem"} #["New here? " (a {href= "/signup"} #["Sign up"])])])]
+
+fn login-page
+  => request
+  login-page-with-err ""
+
+fn lookup-user-row ::: Db
+  => username
+  with default-db
+    db-query registry-db "SELECT id, pw_hash FROM users WHERE username = ?" #[username]
+
+fn login-issue-session ::: Db Random FileIO Serve
+  => user-id
+  with default-db
+    with default-random
+      token := make-web-session user-id
+      {status= 302
+       body= ""
+       headers= {location= "/"
+                 set-cookie= ("irij_session=" ++ token ++ "; HttpOnly; SameSite=Lax; Path=/; Max-Age=2592000")}}
+
+fn login-verify ::: Db Random FileIO Serve
+  => row password
+  stored := get "pw_hash" row
+  if (stored == ())
+    login-page-with-err "Invalid credentials."
+  else
+    login-verify-hash stored (get "id" row) password
+
+fn login-verify-hash ::: Db Random FileIO Serve
+  => stored user-id password
+  if (verify-password stored password)
+    login-issue-session user-id
+  else
+    login-page-with-err "Invalid credentials."
+
+fn login-with-rows ::: Db Random FileIO Serve
+  => rows password
+  if (empty? rows)
+    login-page-with-err "Invalid credentials."
+  else
+    login-verify (head rows) password
+
+fn handle-login ::: Db Random FileIO Serve
+  => request
+  form := parse-form-body request.body
+  username := pick-or-empty (get "username" form)
+  password := pick-or-empty (get "password" form)
+  if (username == "" || password == "")
+    login-page-with-err "Username and password required."
+  else
+    login-with-rows (lookup-user-row username) password
+
+fn delete-session-by-token ::: Db
+  => token
+  if (token == () || token == "")
+    ()
+  else
+    with default-db
+      hashed := sha256-hex token
+      db-exec registry-db "DELETE FROM web_sessions WHERE token_hash = ?" #[hashed]
+
+fn handle-logout ::: Db FileIO Serve
+  => request
+  cookies := parse-cookies (get "cookie" request.headers)
+  token := get "irij_session" cookies
+  delete-session-by-token token
+  {status= 302
+   body= ""
+   headers= {location= "/"
+             set-cookie= "irij_session=; HttpOnly; SameSite=Lax; Path=/; Max-Age=0"}}
+
+
+fn handle-signup ::: Db Random FileIO Serve
+  => request
+  form := parse-form-body request.body
+  username := pick-or-empty (get "username" form)
+  password := pick-or-empty (get "password" form)
+  email := pick-or-empty (get "email" form)
+  if (username == "" || password == "")
+    signup-page-with-err "Username and password required."
+  else
+    signup-check-pw username email password
+
 routes := #[
   (route "GET" "/" home-page)
   (route "GET" "/playground" playground-page)
@@ -919,6 +1156,11 @@ routes := #[
   (route "POST" "/api/seeds/publish" handle-seed-publish)
   (route "GET" "/api/seeds" handle-seed-list)
   (route-prefix "GET" "/api/seeds/" handle-seed-route)
+  (route "GET" "/signup" signup-page)
+  (route "POST" "/signup" handle-signup)
+  (route "GET" "/login" login-page)
+  (route "POST" "/login" handle-login)
+  (route "POST" "/logout" handle-logout)
 ]
 
 with default-serve
