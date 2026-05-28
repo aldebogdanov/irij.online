@@ -14,7 +14,7 @@ use std.auth :open
 use std.random :open
 use std.convert :open
 
-irij-version := "v0.8.1"
+irij-version := "v0.8.4"
 
 ;; ═══════════════════════════════════════════════════════════════════
 ;; Seed Registry — Database
@@ -543,8 +543,14 @@ fn home-roadmap
                          phase-row "done" "v0.7.1" "Capabilities replace raw-* surface (Db, Http, Serve, FileIO, Session); Irij-record caps; named record specs with row params; inline `with do …`; LSP MVP (irij lsp)" ++
                          phase-row "done" "v0.8.0" "Handler:Effect specs (first-class handler values, dynamic-handler typing); LSP 2b.1 (symbol-aware hover, goto-def, identifier completion, effect-row diagnostics)" ++
                          phase-row "done" "v0.8.1" "Per-request HTTP handlers inherit caller's effect stack (SSE / multipart now work); `try` traps every Throwable (division by zero, casts, NPEs); GraalVM deferred to techdebt" ++
-                         phase-row "next" "v0.8.2" "std.queue (Redis/SQLite); multi-tenant package registry" ++
-                         phase-row "planned" "Future" "Linear types (capability + channel safety); channels (send/recv/select); streams/flows; choreographic programming; refinement types; content-addressed code; GraalVM native image"))
+                         phase-row "done" "v0.8.2" "Patch: empty-body HTTP responses send -1 length cleanly (redirects, 204s, errors from `irij publish`)" ++
+                         phase-row "done" "v0.8.3" "`Map` spec accepts records (Tagged with namedFields); vrata-style `El`/`Node` flow through `:: Map` boundaries without ceremony" ++
+                         phase-row "done" "v0.8.4" "`with` + tail `if/else` returns the branch value (EffIR lowering); snake_case identifiers lex as one IDENT (SQL/JSON field names)" ++
+                         phase-row "done" "Multi-tenant registry" "Users, sessions, API tokens, per-owner ownership; auth-gated publish; Datastar dashboard with token CRUD" ++
+                         phase-row "next" "chereda" "Queue effect (Stream a) + SQLite cap; first opt-in seed in irij/ namespace" ++
+                         phase-row "planned" "chereda-redis" "Redis backend for chereda; opt-in jedis dep gated by seed import" ++
+                         phase-row "planned" "butterfly" "Reactive streams on single-resume effects; map/filter/scan/take/merge operators; chereda-backed cross-stream ops" ++
+                         phase-row "planned" "Future" "Linear types (capability + channel safety); channels (send/recv/select); choreographic programming; refinement types; content-addressed code; multi-resume effects (search/nondet/probabilistic); GraalVM native image"))
 
 ;; ── Full home page ───────────────────────────────────────────────
 
