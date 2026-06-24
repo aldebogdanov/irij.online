@@ -1,0 +1,85 @@
+name: release
+
+# Tag-driven release. Push a tag like `v0.8.<commit-count>` to: fetch the irij
+# toolchain, build the self-contained server.jar, smoke-test it, and publish a
+# GitHub Release with the jar attached.
+#
+#   V=0.8.$(git rev-list --count HEAD); git tag v$V && git push origin v$V
+#
+# The reposado servers flake fetches releases/latest/download/server.jar via a
+# `file+https` flake input, so the jar is no longer committed there.
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write          # needed to create the release
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0          # full history — the version's patch number is
+                                  # the commit count (a shallow clone reports 1)
+
+      - name: Set up JDK 25
+        uses: actions/setup-java@v4
+        with:
+          distribution: zulu
+          java-version: '25'
+
+      - name: Download latest irij.jar
+        run: gh release download --repo aldebogdanov/irij --pattern 'irij.jar' --dir .
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      # Version: base (major.minor) is fixed here; patch is the commit count —
+      # monotonic, mirroring michelada-uno/saltrim's scheme. This formula is the
+      # single source of truth, so the pushed tag must agree (verified below).
+      - name: Derive version
+        id: ver
+        run: echo "version=0.8.$(git rev-list --count HEAD)" >> "$GITHUB_OUTPUT"
+
+      - name: Verify pushed tag matches derived version
+        run: |
+          if [ "v${{ steps.ver.outputs.version }}" != "${GITHUB_REF_NAME}" ]; then
+            echo "Tag ${GITHUB_REF_NAME} != derived version v${{ steps.ver.outputs.version }}" >&2
+            echo "Tag with: V=0.8.\$(git rev-list --count HEAD); git tag v\$V && git push origin v\$V" >&2
+            exit 1
+          fi
+
+      # `irij build` resolves and bundles seeds; install first so the vrata git
+      # seed is in ~/.irij/seeds (the proven ci.yml path). `build` runs no spec
+      # lint, so no --no-spec-lint needed here (that flag only mutes warnings in
+      # the interpreter run path).
+      - name: Install seeds
+        run: java -jar irij.jar install
+
+      - name: Build self-contained server.jar
+        run: java -jar irij.jar build server.irj -o server.jar
+
+      - name: Smoke-test the built jar
+        run: |
+          sudo mkdir -p /var/lib/irij.online/{seeds,seeds-db}
+          sudo chown -R runner /var/lib/irij.online
+          java --enable-native-access=ALL-UNNAMED -jar server.jar &
+          SERVER_PID=$!
+          sleep 5
+          RESPONSE=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:8080)
+          kill $SERVER_PID || true
+          if [ "$RESPONSE" != "200" ]; then
+            echo "Built jar returned HTTP $RESPONSE, expected 200" >&2
+            exit 1
+          fi
+          echo "Smoke test passed: server.jar serves HTTP 200"
+
+      - name: Publish GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: server.jar
+          generate_release_notes: true
+          fail_on_unmatched_files: true
