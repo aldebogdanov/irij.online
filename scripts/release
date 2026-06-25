@@ -1,0 +1,56 @@
+#!/usr/bin/env bash
+#
+# Cut a release in one shot:
+#
+#   ./scripts/release <version>     e.g. ./scripts/release 1.0.0
+#
+# The website carries its own manual SemVer (MAJOR.MINOR.PATCH), independent of
+# the Irij engine version (which is auto-stamped into the page at build time).
+# Bump it by hand: PATCH for engine bumps / small fixes, MINOR for site
+# features, MAJOR for big reworks. Pushing v<version> triggers
+# .github/workflows/release.yml to build server.jar and publish the release.
+#
+# Run from a clean, up-to-date checkout of main.
+set -euo pipefail
+cd "$(dirname "$0")/.."
+
+repo="aldebogdanov/irij.online"
+
+version="${1:-}"
+if [ -z "$version" ]; then
+  echo "usage: ./scripts/release <version>   (e.g. 1.0.0)" >&2
+  exit 1
+fi
+if ! printf '%s' "$version" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+$'; then
+  echo "error: '$version' is not SemVer MAJOR.MINOR.PATCH (e.g. 1.0.0)." >&2
+  exit 1
+fi
+tag="v${version}"
+
+branch=$(git rev-parse --abbrev-ref HEAD)
+if [ "$branch" != "main" ]; then
+  echo "error: on branch '$branch', expected 'main'." >&2
+  exit 1
+fi
+if [ -n "$(git status --porcelain)" ]; then
+  echo "error: working tree is not clean — commit or stash first." >&2
+  exit 1
+fi
+
+git fetch --quiet origin main
+if [ "$(git rev-parse HEAD)" != "$(git rev-parse origin/main)" ]; then
+  echo "error: local main != origin/main. Sync first (git pull --ff-only)." >&2
+  exit 1
+fi
+
+if git rev-parse -q --verify "refs/tags/${tag}" >/dev/null \
+   || git ls-remote --exit-code --tags origin "${tag}" >/dev/null 2>&1; then
+  echo "error: tag ${tag} already exists (pick the next version)." >&2
+  exit 1
+fi
+
+echo "Releasing ${tag} ..."
+git tag "${tag}"
+git push origin "${tag}"
+echo "Pushed ${tag}. Watch the build:  gh run watch --repo ${repo}"
+echo "Release will appear at: https://github.com/${repo}/releases/tag/${tag}"

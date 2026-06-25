@@ -1,0 +1,78 @@
+name: release
+
+# Tag-driven release. The website carries its own manual SemVer
+# (./scripts/release 1.0.0) — independent of the Irij engine version, which is
+# auto-stamped into the page at build time from the toolchain that builds it.
+# Pushing a `v<x.y.z>` tag builds the self-contained server.jar, smoke-tests it,
+# and publishes it as a GitHub Release asset named `server.jar`.
+#
+#   ./scripts/release 1.0.0      # first release
+#   ./scripts/release 1.0.1      # engine bump / small fix
+#   ./scripts/release 1.1.0      # site feature
+#
+# The reposado servers flake fetches releases/latest/download/server.jar via a
+# `file+https` flake input, so the jar is no longer committed there.
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write          # needed to create the release
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK 25
+        uses: actions/setup-java@v4
+        with:
+          distribution: zulu
+          java-version: '25'
+
+      - name: Download irij.jar and resolve its version
+        id: irij
+        run: |
+          gh release download --repo aldebogdanov/irij --pattern 'irij.jar' --dir .
+          echo "tag=$(gh release view --repo aldebogdanov/irij --json tagName -q .tagName)" >> "$GITHUB_OUTPUT"
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      # Stamp the real engine version into the page (footer + badge) so it always
+      # reflects the toolchain that built this jar, not a stale constant. The
+      # hardcoded `irij-version` in server.irj stays only as a local-dev fallback.
+      - name: Stamp Irij engine version into the site
+        run: |
+          sed -i "s/^irij-version := .*/irij-version := \"${{ steps.irij.outputs.tag }}\"/" server.irj
+          grep -n '^irij-version :=' server.irj
+
+      - name: Install seeds
+        run: java -jar irij.jar install
+
+      - name: Build self-contained server.jar
+        run: java -jar irij.jar build server.irj -o server.jar
+
+      - name: Smoke-test the built jar
+        run: |
+          sudo mkdir -p /var/lib/irij.online/{seeds,seeds-db}
+          sudo chown -R runner /var/lib/irij.online
+          java --enable-native-access=ALL-UNNAMED -jar server.jar &
+          SERVER_PID=$!
+          sleep 5
+          RESPONSE=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:8080)
+          kill $SERVER_PID || true
+          if [ "$RESPONSE" != "200" ]; then
+            echo "Built jar returned HTTP $RESPONSE, expected 200" >&2
+            exit 1
+          fi
+          echo "Smoke test passed: server.jar serves HTTP 200"
+
+      - name: Publish GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: server.jar
+          generate_release_notes: true
+          fail_on_unmatched_files: true
