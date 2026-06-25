@@ -1,10 +1,14 @@
 name: release
 
-# Tag-driven release. Push a tag like `v0.8.<commit-count>` to: fetch the irij
-# toolchain, build the self-contained server.jar, smoke-test it, and publish a
-# GitHub Release with the jar attached.
+# Tag-driven release. The website carries its own manual SemVer
+# (./scripts/release 1.0.0) — independent of the Irij engine version, which is
+# auto-stamped into the page at build time from the toolchain that builds it.
+# Pushing a `v<x.y.z>` tag builds the self-contained server.jar, smoke-tests it,
+# and publishes it as a GitHub Release asset named `server.jar`.
 #
-#   V=0.8.$(git rev-list --count HEAD); git tag v$V && git push origin v$V
+#   ./scripts/release 1.0.0      # first release
+#   ./scripts/release 1.0.1      # engine bump / small fix
+#   ./scripts/release 1.1.0      # site feature
 #
 # The reposado servers flake fetches releases/latest/download/server.jar via a
 # `file+https` flake input, so the jar is no longer committed there.
@@ -22,9 +26,6 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0          # full history — the version's patch number is
-                                  # the commit count (a shallow clone reports 1)
 
       - name: Set up JDK 25
         uses: actions/setup-java@v4
@@ -32,30 +33,37 @@ jobs:
           distribution: zulu
           java-version: '25'
 
-      - name: Download latest irij.jar
-        run: gh release download --repo aldebogdanov/irij --pattern 'irij.jar' --dir .
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-      # Version: base (major.minor) is fixed here; patch is the commit count —
-      # monotonic, mirroring michelada-uno/saltrim's scheme. This formula is the
-      # single source of truth, so the pushed tag must agree (verified below).
-      - name: Derive version
-        id: ver
-        run: echo "version=0.8.$(git rev-list --count HEAD)" >> "$GITHUB_OUTPUT"
-
-      - name: Verify pushed tag matches derived version
+      # irij.toml [project] version is the website's single source of truth, set
+      # by ./scripts/release. Verify the pushed tag agrees, so a hand-pushed tag
+      # can never name a release that disagrees with irij.toml.
+      - name: Verify pushed tag matches irij.toml version
         run: |
-          if [ "v${{ steps.ver.outputs.version }}" != "${GITHUB_REF_NAME}" ]; then
-            echo "Tag ${GITHUB_REF_NAME} != derived version v${{ steps.ver.outputs.version }}" >&2
-            echo "Tag with: V=0.8.\$(git rev-list --count HEAD); git tag v\$V && git push origin v\$V" >&2
+          version=$(awk -F'"' '
+            /^[[:space:]]*\[/                                              { s = $0 }
+            s ~ /\[project\]/ && /^[[:space:]]*version[[:space:]]*=/       { print $2; exit }
+          ' irij.toml)
+          if [ "v${version}" != "${GITHUB_REF_NAME}" ]; then
+            echo "Tag ${GITHUB_REF_NAME} != irij.toml version v${version}" >&2
+            echo "Bump [project] version in irij.toml, then tag via ./scripts/release" >&2
             exit 1
           fi
 
-      # `irij build` resolves and bundles seeds; install first so the vrata git
-      # seed is in ~/.irij/seeds (the proven ci.yml path). `build` runs no spec
-      # lint, so no --no-spec-lint needed here (that flag only mutes warnings in
-      # the interpreter run path).
+      - name: Download irij.jar and resolve its version
+        id: irij
+        run: |
+          gh release download --repo aldebogdanov/irij --pattern 'irij.jar' --dir .
+          echo "tag=$(gh release view --repo aldebogdanov/irij --json tagName -q .tagName)" >> "$GITHUB_OUTPUT"
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      # Stamp the real engine version into the page (footer + badge) so it always
+      # reflects the toolchain that built this jar, not a stale constant. The
+      # hardcoded `irij-version` in server.irj stays only as a local-dev fallback.
+      - name: Stamp Irij engine version into the site
+        run: |
+          sed -i "s/^irij-version := .*/irij-version := \"${{ steps.irij.outputs.tag }}\"/" server.irj
+          grep -n '^irij-version :=' server.irj
+
       - name: Install seeds
         run: java -jar irij.jar install
 

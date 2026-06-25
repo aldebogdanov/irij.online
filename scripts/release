@@ -1,19 +1,40 @@
 #!/usr/bin/env bash
 #
-# Cut a release in one shot: derive the version, tag it, push the tag. Pushing a
-# `v*` tag triggers .github/workflows/release.yml, which downloads the irij
-# toolchain, runs `irij build server.irj -o server.jar`, smoke-tests it, and
-# publishes a GitHub Release with the stable-named `server.jar` asset.
+# Cut a release in one shot:
 #
 #   ./scripts/release
 #
-# Version is `0.8.<commit-count>` (base fixed, patch = commit count), mirroring
-# michelada-uno/saltrim. The workflow refuses a tag that disagrees, so we derive
-# it the same way here. Run from a clean, up-to-date checkout of main.
+# The version is the single source of truth in irij.toml ([project] version) —
+# the website's own SemVer. Bump it there (commit + push to main) first, then
+# run this. Pushing v<version> triggers .github/workflows/release.yml to build
+# server.jar and publish the release.
+#
+# Re-releasing the same version fails (the tag already exists), so you MUST bump
+# irij.toml before each release. The Irij ENGINE version shown on the page is a
+# separate thing, auto-stamped from the toolchain at build time.
+#
+# Run from a clean, up-to-date checkout of main.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
 repo="aldebogdanov/irij.online"
+
+# Read [project] version from irij.toml. Section-aware so a stray `version =`
+# key in another table can't shadow it.
+version=$(awk -F'"' '
+  /^[[:space:]]*\[/                                              { section = $0 }
+  section ~ /\[project\]/ && /^[[:space:]]*version[[:space:]]*=/ { print $2; exit }
+' irij.toml)
+
+if [ -z "$version" ]; then
+  echo "error: could not read [project] version from irij.toml." >&2
+  exit 1
+fi
+if ! printf '%s' "$version" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+$'; then
+  echo "error: irij.toml version '$version' is not SemVer MAJOR.MINOR.PATCH." >&2
+  exit 1
+fi
+tag="v${version}"
 
 branch=$(git rev-parse --abbrev-ref HEAD)
 if [ "$branch" != "main" ]; then
@@ -31,15 +52,13 @@ if [ "$(git rev-parse HEAD)" != "$(git rev-parse origin/main)" ]; then
   exit 1
 fi
 
-version="0.8.$(git rev-list --count HEAD)"
-tag="v${version}"
-
-if git rev-parse -q --verify "refs/tags/${tag}" >/dev/null; then
-  echo "error: tag ${tag} already exists (nothing new to release)." >&2
+if git rev-parse -q --verify "refs/tags/${tag}" >/dev/null \
+   || git ls-remote --exit-code --tags origin "${tag}" >/dev/null 2>&1; then
+  echo "error: ${tag} already released. Bump 'version' in irij.toml first." >&2
   exit 1
 fi
 
-echo "Releasing ${tag} ..."
+echo "Releasing ${tag} (from irij.toml) ..."
 git tag "${tag}"
 git push origin "${tag}"
 echo "Pushed ${tag}. Watch the build:  gh run watch --repo ${repo}"
