@@ -1,5 +1,6 @@
 [project]
 name = "irij.online"
+
 # Website's own SemVer — independent of the Irij engine version shown on the
 # page (that one is auto-stamped from the toolchain at build time). Bump by hand
 # via ./scripts/release: PATCH for engine bumps/small fixes, MINOR for site
