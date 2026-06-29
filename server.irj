@@ -14,7 +14,7 @@ use std.auth :open
 use std.random :open
 use std.convert :open
 
-irij-version := "v0.8.4"
+irij-version := "v0.8.5"
 
 ;; ═══════════════════════════════════════════════════════════════════
 ;; Seed Registry — Database
@@ -546,10 +546,11 @@ fn home-roadmap
                          phase-row "done" "v0.8.2" "Patch: empty-body HTTP responses send -1 length cleanly (redirects, 204s, errors from `irij publish`)" ++
                          phase-row "done" "v0.8.3" "`Map` spec accepts records (Tagged with namedFields); vrata-style `El`/`Node` flow through `:: Map` boundaries without ceremony" ++
                          phase-row "done" "v0.8.4" "`with` + tail `if/else` returns the branch value (EffIR lowering); snake_case identifiers lex as one IDENT (SQL/JSON field names)" ++
+                         phase-row "done" "v0.8.5" "Multi-class emission: inlined-module fns compile into per-source-file classes, so JVM stack frames name the right .irj instead of the root program" ++
                          phase-row "done" "Multi-tenant registry" "Users, sessions, API tokens, per-owner ownership; auth-gated publish; Datastar dashboard with token CRUD" ++
-                         phase-row "next" "chereda" "Queue effect (Stream a) + SQLite cap; first opt-in seed in irij/ namespace" ++
-                         phase-row "planned" "chereda-redis" "Redis backend for chereda; opt-in jedis dep gated by seed import" ++
-                         phase-row "planned" "butterfly" "Reactive streams on single-resume effects; map/filter/scan/take/merge operators; chereda-backed cross-stream ops" ++
+                         phase-row "done" "chereda" "Queue effect + SQLite cap; at-least-once with optional dedup keys; first opt-in seed" ++
+                         phase-row "next" "chereda-redis" "Redis backend for chereda; opt-in jedis dep gated by seed import" ++
+                         phase-row "planned" "butterfly" "Reactive streams: signal/compute/deref/swap! on single-resume effects; auto dep-tracking via effect handler; chereda-backed cross-stream ops" ++
                          phase-row "planned" "Future" "Linear types (capability + channel safety); channels (send/recv/select); choreographic programming; refinement types; content-addressed code; multi-resume effects (search/nondet/probabilistic); GraalVM native image"))
 
 ;; ── Full home page ───────────────────────────────────────────────

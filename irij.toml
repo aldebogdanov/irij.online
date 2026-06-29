@@ -5,13 +5,14 @@ name = "irij.online"
 # page (that one is auto-stamped from the toolchain at build time). Bump by hand
 # via ./scripts/release: PATCH for engine bumps/small fixes, MINOR for site
 # features, MAJOR for big reworks.
-version = "1.0.0"
+version = "1.0.1"
 description = "Irij language website, seeds registry and playground"
 
 [seeds]
-# Temporary git-dep bypass — registry endpoint on the live site is
-# broken (effect-row runtime error from a prior strict-row push),
-# breaking CI smoke-test chicken-and-egg. Once the new site deploys
-# and the live registry serves vrata 0.1.3 again, restore the line:
-#   vrata = "0.1.3"
-vrata = { git = "https://github.com/aldebogdanov/vrata.git", tag = "v0.1.3" }
+# Git-tag dep (not registry) — bypasses the chicken-and-egg: the live
+# registry can't serve a fixed vrata until the site that hosts it is
+# rebuilt against a fixed vrata. v0.2.1 carries the void-element guard
+# (published 0.2.0 crashed every page with a <link> in the head).
+# Once this build deploys and the registry is healthy, `irij publish`
+# vrata 0.2.1 and restore the registry dep:  vrata = "0.2.1"
+vrata = { git = "https://github.com/aldebogdanov/vrata.git", tag = "v0.2.1" }
