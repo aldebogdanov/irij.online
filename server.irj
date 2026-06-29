@@ -23,6 +23,11 @@ irij-version := "v0.8.5"
 ;; Working dir
 workdir := env "IRIJ_ONLINE_WORKDIR" "/var/lib/irij.online"
 
+;; Admin password for the reserved `aldebogdanov` account, read at
+;; top level (Env is ambient here) so the DB-init fns don't need the
+;; Env effect. Empty when unset → the account stays un-loginable.
+admin-password := env "IRIJ_ADMIN_PASSWORD" ""
+
 ;; Storage paths
 seeds-db-dir := workdir ++ "/seeds-db"
 seeds-db-path := seeds-db-dir ++ "/registry.db"
@@ -48,7 +53,8 @@ fn reserved-usernames :: Vec
   (-> #[
     "irij"            ;; core team / legacy package owner
     "online"          ;; site infra
-    "aldebogdanov"    ;; project lead handle, reserved against impersonation
+    "aldebogdanov"    ;; project lead handle — reserved against impersonation;
+                      ;; gets a real password from IRIJ_ADMIN_PASSWORD (below)
     "admin" "root" "system" "www" "api" "test" "support"
   ])
 
@@ -105,6 +111,30 @@ fn add-owner-id-column-if-missing ::: Db Console
 fn seed-reserved-users ::: Db Console
   => conn
   insert-reserved-users conn (reserved-usernames ())
+  seed-admin-password conn
+
+;; Reserved usernames are inserted with NULL pw_hash so nobody can
+;; sign up as them. But the project-lead handle (`aldebogdanov`) must
+;; still be loginable by its actual owner — so its password is seeded
+;; from the IRIJ_ADMIN_PASSWORD env var (provided via the deploy
+;; secret). When set, we (re)hash it onto that row. Empty/unset env →
+;; the row keeps NULL pw_hash and stays un-loginable (e.g. local dev
+;; without the secret). Idempotent: rotating the env var rotates the
+;; password on next boot.
+fn seed-admin-password ::: Db Console
+  => conn
+  if (admin-password == "")
+    ()
+  else
+    set-admin-password conn admin-password
+
+fn set-admin-password ::: Db Console
+  => conn pw
+  with default-random
+    salt := new-salt ()
+    pw-hash := hash-password salt pw
+    db-exec conn "UPDATE users SET pw_hash = ? WHERE username = 'aldebogdanov'" #[pw-hash]
+    println "Admin password seeded for aldebogdanov"
 
 fn insert-reserved-users ::: Db Console
   => conn names
@@ -345,6 +375,7 @@ fn make-nav
                   ++ "<a href=\"/seeds\" class=\"" ++ (if (active == "/seeds") "active" else "") ++ "\">Seeds</a>"
                   ++ "<a href=\"/playground\" class=\"" ++ (if (active == "/playground") "active" else "") ++ "\">Playground</a>"
                   ++ "<a href=\"/docs\" class=\"" ++ (if (active == "/docs") "active" else "") ++ "\">Docs</a>"
+                  ++ "<a href=\"/dashboard\" class=\"" ++ (if (active == "/dashboard") "active" else "") ++ "\">Dashboard</a>"
                   ++ "<a class=\"gh-link\" href=\"https://github.com/aldebogdanov/irij\" target=\"_blank\" title=\"GitHub\"><svg viewBox=\"0 0 16 16\" width=\"20\" height=\"20\" fill=\"currentColor\" style=\"vertical-align:middle\"><path d=\"M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z\"/></svg></a>"
                   ++ "</nav>"))
 

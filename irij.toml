@@ -5,7 +5,7 @@ name = "irij.online"
 # page (that one is auto-stamped from the toolchain at build time). Bump by hand
 # via ./scripts/release: PATCH for engine bumps/small fixes, MINOR for site
 # features, MAJOR for big reworks.
-version = "1.0.1"
+version = "1.0.2"
 description = "Irij language website, seeds registry and playground"
 
 [seeds]
