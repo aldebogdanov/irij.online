@@ -4,14 +4,16 @@
 #
 #   ./scripts/release
 #
-# The version is the single source of truth in irij.toml ([project] version) —
-# the website's own SemVer. Bump it there (commit + push to main) first, then
-# run this. Pushing v<version> triggers .github/workflows/release.yml to build
-# server.jar and publish the release.
+# Commit-count versioning. The 2-part base (MAJOR.MINOR) is the single source
+# of truth in irij.toml ([project] version); the released version is
+# base + "." + the git commit count — you never hand-pick the patch. Bump the
+# base in irij.toml only for a MAJOR/MINOR release; otherwise just land commits
+# on main and run this. Pushing v<version> triggers .github/workflows/release.yml
+# to build server.jar and publish the release.
 #
-# Re-releasing the same version fails (the tag already exists), so you MUST bump
-# irij.toml before each release. The Irij ENGINE version shown on the page is a
-# separate thing, auto-stamped from the toolchain at build time.
+# Each commit advances the patch, so re-running on the same commit fails (the
+# tag already exists) — land a new commit to cut the next patch. The Irij ENGINE
+# version shown on the page is separate (auto-stamped from the toolchain).
 #
 # Run from a clean, up-to-date checkout of main.
 set -euo pipefail
@@ -19,22 +21,22 @@ cd "$(dirname "$0")/.."
 
 repo="aldebogdanov/irij.online"
 
-# Read [project] version from irij.toml. Section-aware so a stray `version =`
-# key in another table can't shadow it.
-version=$(awk -F'"' '
+# Read the 2-part base (MAJOR.MINOR) from irij.toml [project] version.
+# Section-aware so a stray `version =` key in another table can't shadow it.
+base=$(awk -F'"' '
   /^[[:space:]]*\[/                                              { section = $0 }
   section ~ /\[project\]/ && /^[[:space:]]*version[[:space:]]*=/ { print $2; exit }
 ' irij.toml)
 
-if [ -z "$version" ]; then
+if [ -z "$base" ]; then
   echo "error: could not read [project] version from irij.toml." >&2
   exit 1
 fi
-if ! printf '%s' "$version" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+$'; then
-  echo "error: irij.toml version '$version' is not SemVer MAJOR.MINOR.PATCH." >&2
+if ! printf '%s' "$base" | grep -Eq '^[0-9]+\.[0-9]+$'; then
+  echo "error: irij.toml version '$base' must be a 2-part MAJOR.MINOR base" >&2
+  echo "       (the patch is the git commit count, appended automatically)." >&2
   exit 1
 fi
-tag="v${version}"
 
 branch=$(git rev-parse --abbrev-ref HEAD)
 if [ "$branch" != "main" ]; then
@@ -52,13 +54,18 @@ if [ "$(git rev-parse HEAD)" != "$(git rev-parse origin/main)" ]; then
   exit 1
 fi
 
+# Patch = commit count on the synced main HEAD. Version = base.patch.
+version="${base}.$(git rev-list --count HEAD)"
+tag="v${version}"
+
 if git rev-parse -q --verify "refs/tags/${tag}" >/dev/null \
    || git ls-remote --exit-code --tags origin "${tag}" >/dev/null 2>&1; then
-  echo "error: ${tag} already released. Bump 'version' in irij.toml first." >&2
+  echo "error: ${tag} already released. The patch is the commit count —" >&2
+  echo "       land a new commit on main to cut the next patch." >&2
   exit 1
 fi
 
-echo "Releasing ${tag} (from irij.toml) ..."
+echo "Releasing ${tag} (base ${base} + commit count) ..."
 git tag "${tag}"
 git push origin "${tag}"
 echo "Pushed ${tag}. Watch the build:  gh run watch --repo ${repo}"

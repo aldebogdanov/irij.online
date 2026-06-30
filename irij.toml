@@ -1,11 +1,13 @@
 [project]
 name = "irij.online"
 
-# Website's own SemVer — independent of the Irij engine version shown on the
-# page (that one is auto-stamped from the toolchain at build time). Bump by hand
-# via ./scripts/release: PATCH for engine bumps/small fixes, MINOR for site
-# features, MAJOR for big reworks.
-version = "1.0.3"
+# Website's own version — independent of the Irij engine version shown on the
+# page (that one is auto-stamped from the toolchain at build time). This is the
+# 2-part MAJOR.MINOR *base*: the released version is base + "." + the git commit
+# count (see ./scripts/release). Bump the base by hand only for a MINOR site
+# feature or a MAJOR rework; engine bumps and small fixes just ride the commit
+# count.
+version = "1.0"
 description = "Irij language website, seeds registry and playground"
 
 [seeds]
