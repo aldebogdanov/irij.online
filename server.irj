@@ -81,7 +81,7 @@ fn init-registry-db ::: Console
     ;; added via the migration step below, then the legacy free-form
     ;; `owner` TEXT column is dropped (8.2c picked single source of
     ;; truth: users.username via owner_id FK).
-    db-exec conn "CREATE TABLE IF NOT EXISTS packages (name TEXT PRIMARY KEY, owner_id INTEGER REFERENCES users(id), license TEXT, created TEXT DEFAULT (datetime('now')), updated TEXT DEFAULT (datetime('now')))" #[]
+    db-exec conn "CREATE TABLE IF NOT EXISTS packages (name TEXT PRIMARY KEY, owner_id INTEGER REFERENCES users(id), license TEXT, website TEXT DEFAULT '', repo TEXT DEFAULT '', docs TEXT DEFAULT '', created TEXT DEFAULT (datetime('now')), updated TEXT DEFAULT (datetime('now')))" #[]
     db-exec conn "CREATE TABLE IF NOT EXISTS versions (id INTEGER PRIMARY KEY AUTOINCREMENT, package_name TEXT NOT NULL REFERENCES packages(name), version TEXT NOT NULL, description TEXT, readme TEXT, author TEXT NOT NULL, checksum TEXT, published TEXT DEFAULT (datetime('now')), UNIQUE(package_name, version))" #[]
     db-exec conn "CREATE TABLE IF NOT EXISTS version_deps (id INTEGER PRIMARY KEY AUTOINCREMENT, version_id INTEGER NOT NULL REFERENCES versions(id), dep_name TEXT NOT NULL, dep_type TEXT NOT NULL CHECK(dep_type IN ('registry', 'git')), dep_version TEXT, git_url TEXT, git_ref TEXT)" #[]
     ;; Legacy migration: ALTER ADD owner_id when an old DB created
@@ -90,6 +90,12 @@ fn init-registry-db ::: Console
     add-owner-id-column-if-missing conn
     backfill-package-owners conn
     drop-legacy-owner-column-if-present conn
+    ;; Link columns (website/repo/docs from irij.toml at publish time)
+    ;; arrived later than the table — same PRAGMA-probe migration
+    ;; pattern for DBs created before them.
+    add-link-column-if-missing conn "website"
+    add-link-column-if-missing conn "repo"
+    add-link-column-if-missing conn "docs"
   println "Registry DB initialized"
 
 ;; SQLite has no "ADD COLUMN IF NOT EXISTS"; probe via PRAGMA and
@@ -103,6 +109,18 @@ fn add-owner-id-column-if-missing ::: Db Console
     ()
   else
     db-exec conn "ALTER TABLE packages ADD COLUMN owner_id INTEGER REFERENCES users(id)" #[]
+
+;; Same probe-then-ALTER dance for the optional seed link columns.
+;; Column name comes from our own boot code (never user input), so
+;; string-building the ALTER is safe here.
+fn add-link-column-if-missing ::: Db Console
+  => conn col
+  cols := db-query conn "PRAGMA table_info(packages)" #[]
+  has-col? := fold (acc c -> acc || (c.name == col)) false cols
+  if has-col?
+    ()
+  else
+    db-exec conn ("ALTER TABLE packages ADD COLUMN " ++ col ++ " TEXT DEFAULT ''") #[]
 
 ;; Insert every reserved username with NULL pw_hash. INSERT OR
 ;; IGNORE deduplicates so subsequent boots are no-ops. Done via
@@ -327,6 +345,20 @@ fn css
     (rule ".auth-form input" "width:100%;box-sizing:border-box;padding:.5rem .7rem;border:1px solid var(--border);border-radius:.4rem;background:var(--card-bg);color:var(--fg);font-family:inherit;font-size:.95rem")
     (rule ".auth-form input:focus" "outline:none;border-color:var(--accent)")
     (rule ".auth-form button" "align-self:flex-start;padding:.5rem 1.2rem;background:var(--accent);color:#fff;border:none;border-radius:.4rem;cursor:pointer;font-size:.95rem")
+    ;; Dashboard forms: token form capped like auth-form (unbounded
+    ;; flex input pushed the submit off-screen); logout is a compact
+    ;; outlined button in accent color right under it.
+    (rule ".token-form" "display:flex;gap:.5rem;margin-top:1rem;max-width:480px")
+    (rule ".token-form input" "flex:1;box-sizing:border-box;padding:.5rem .7rem;border:1px solid var(--border);border-radius:.4rem;background:var(--card-bg);color:var(--fg);font-family:inherit;font-size:.95rem")
+    (rule ".token-form input:focus" "outline:none;border-color:var(--accent)")
+    (rule ".token-form button" "padding:.5rem 1.2rem;background:var(--accent);color:#fff;border:none;border-radius:.4rem;cursor:pointer;font-size:.95rem;white-space:nowrap")
+    (rule ".logout-form" "margin-top:1rem")
+    (rule ".logout-btn" "font-size:.85rem;padding:.35rem .9rem;background:none;border:1px solid var(--accent);color:var(--accent);border-radius:.375rem;cursor:pointer;transition:all .15s")
+    (rule ".logout-btn:hover" "background:var(--accent);color:#fff")
+    ;; Seed detail: optional project links (website/repo/docs)
+    (rule ".seed-links" "display:flex;gap:1.25rem;margin-top:.6rem;font-size:.85rem")
+    (rule ".seed-links a" "color:var(--accent);text-decoration:none")
+    (rule ".seed-links a:hover" "text-decoration:underline")
     (rule ".ver-tag" "font-family:JetBrains Mono,monospace;font-weight:600;color:var(--accent);min-width:80px")
     (rule ".ver-date" "font-size:.8rem;color:var(--muted)")
     (rule ".ver-author" "font-size:.8rem;color:var(--muted)")
@@ -387,13 +419,29 @@ fn make-nav
                   ++ "<a class=\"gh-link\" href=\"https://github.com/aldebogdanov/irij\" target=\"_blank\" title=\"GitHub\"><svg viewBox=\"0 0 16 16\" width=\"20\" height=\"20\" fill=\"currentColor\" style=\"vertical-align:middle\"><path d=\"M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z\"/></svg></a>"
                   ++ "</nav>"))
 
-fn head-extras :: #[_] _
-  (extras -> #[(link-tag {rel= "icon" type= "image/png" href= "/Irij-favicon.png"})
-               (link-tag {rel= "stylesheet" href= "https://unpkg.com/chota@0.9.2/dist/chota.min.css"})
-               (link-tag {rel= "stylesheet" href= "https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=JetBrains+Mono:wght@400&family=Roboto+Slab:wght@700&display=swap"})] ++ extras)
+site-description := "A JVM language with algebraic effects, runtime specs, and property-based contracts"
+
+fn og-tags :: _ #[_]
+  => ttl
+  full-ttl := ttl ++ " — Irij"
+  #[(el "meta" {property= "og:type" content= "website"} #[])
+      (el "meta" {property= "og:site_name" content= "Irij"} #[])
+      (el "meta" {property= "og:title" content= full-ttl} #[])
+      (el "meta" {property= "og:description" content= site-description} #[])
+      (el "meta" {property= "og:image" content= "https://irij.online/Irij.png"} #[])
+      (el "meta" {property= "og:url" content= "https://irij.online"} #[])
+      (el "meta" {name= "twitter:card" content= "summary_large_image"} #[])
+      (el "meta" {name= "twitter:title" content= full-ttl} #[])
+      (el "meta" {name= "twitter:description" content= site-description} #[])
+      (el "meta" {name= "twitter:image" content= "https://irij.online/Irij.png"} #[])]
+
+fn head-extras :: _ #[_] _
+  (ttl extras -> #[(link-tag {rel= "icon" type= "image/png" href= "/Irij-favicon.png"})
+                   (link-tag {rel= "stylesheet" href= "https://unpkg.com/chota@0.9.2/dist/chota.min.css"})
+                   (link-tag {rel= "stylesheet" href= "https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=JetBrains+Mono:wght@400&family=Roboto+Slab:wght@700&display=swap"})] ++ (og-tags ttl) ++ extras)
 
 fn layout-head-extra :: _ #[_] _ #[_] _
-  (ttl h-extras active body-children -> page (ttl ++ " — Irij") (css ()) (head-extras h-extras) #[(div (cls "container") #[(header (cls "site-header") #[(div (cls "inner") #[(a {class= "logo" href= "/"} #[(img {src= "/Irij.png" alt= "Irij" class= "logo-img"})]) (make-nav active)])]) (main {} body-children) (footer {} #["Irij " ++ irij-version ++ " — Where contracts meet effects"])])])
+  (ttl h-extras active body-children -> page (ttl ++ " — Irij") (css ()) (head-extras ttl h-extras) #[(div (cls "container") #[(header (cls "site-header") #[(div (cls "inner") #[(a {class= "logo" href= "/"} #[(img {src= "/Irij.png" alt= "Irij" class= "logo-img"})]) (make-nav active)])]) (main {} body-children) (footer {} #["Irij " ++ irij-version ++ " — Where contracts meet effects"])])])
 
 fn layout
   (ttl active body-children -> layout-head-extra ttl #[] active body-children)
@@ -761,7 +809,7 @@ fn seed-detail-page
   segments := path-segments request.path "/seeds"
   name := head segments
   with default-db
-    pkg := db-query registry-db "SELECT p.name, u.username AS owner, p.license, p.created FROM packages p JOIN users u ON u.id = p.owner_id WHERE p.name = ?" #[name]
+    pkg := db-query registry-db "SELECT p.name, u.username AS owner, p.license, p.website, p.repo, p.docs, p.created FROM packages p JOIN users u ON u.id = p.owner_id WHERE p.name = ?" #[name]
     if (empty? pkg)
       html ~ layout "Not Found" "/seeds" #[(h2 {} #["Seed Not Found"]) (p {} #[("No seed named '" ++ name ++ "' exists.")])]
     else
@@ -775,7 +823,8 @@ fn seed-detail-page
           (p {class= "sub"} #[latest.description])
           (div {class= "seed-meta"} #[
             (span {} #[(raw ("by <strong>" ++ latest.author ++ "</strong>"))])
-            (span {} #[("License: " ++ pkg-info.license)])])])
+            (span {} #[("License: " ++ pkg-info.license)])])
+          (seed-links-el pkg-info)])
         (h3 {} #["Install"])
         (div {class= "seed-install"} #[(raw (name ++ " = \"" ++ latest.version ++ "\""))])
         (p {style= "font-size:.85rem;color:var(--muted)"} #["Add to [seeds] in irij.toml"])
@@ -789,6 +838,30 @@ fn render-version-item
     (span {class= "ver-tag"} #[v.version])
     (span {class= "ver-author"} #[v.author])
     (span {class= "ver-date"} #[v.published])]
+
+;; Optional project links published from irij.toml (website/repo/docs).
+;; Pre-link rows carry '' (migration DEFAULT), old JSON rows may carry
+;; () — str-or-empty covers both. Row renders only when at least one
+;; link is set.
+fn seed-link-el
+  => label url
+  if (url == "")
+    (span {} #[])
+  else
+    (a {href= url class= "seed-link" target= "_blank" rel= "noopener"} #[(label ++ " ↗")])
+
+fn seed-links-el
+  => pkg-info
+  website := str-or-empty pkg-info.website
+  repo := str-or-empty pkg-info.repo
+  docs := str-or-empty pkg-info.docs
+  if (website == "" && repo == "" && docs == "")
+    (span {} #[])
+  else
+    (div {class= "seed-links"} #[
+      (seed-link-el "Website" website)
+      (seed-link-el "Repository" repo)
+      (seed-link-el "Docs" docs)])
 
 ;; ═══════════════════════════════════════════════════════════════════
 ;; Seed Registry — API
@@ -838,6 +911,26 @@ fn handle-seed-publish ::: Db FileIO Serve
   else
     publish-validate request caller
 
+;; Missing key → () from `get`; older clients don't send the link
+;; fields at all, so normalize to "" before use.
+fn str-or-empty
+  => v
+  if (v == ())
+    ""
+  else
+    v
+
+;; A link is bad when present but not a web URL. The CLI validates
+;; too, but the API is reachable directly — a `javascript:` href on
+;; the seed page would be stored XSS, so the scheme check must live
+;; server-side.
+fn bad-link? :: _ Bool
+  => v
+  if (v == "")
+    false
+  else
+    ((starts-with? v "https://") || (starts-with? v "http://")) == false
+
 fn publish-validate ::: Db FileIO Serve
   => request caller
   meta-json := multipart-field request "metadata"
@@ -846,20 +939,26 @@ fn publish-validate ::: Db FileIO Serve
   version := get "version" meta
   description := get "description" meta
   license := get "license" meta
+  links := {website= (str-or-empty (get "website" meta))
+            repo= (str-or-empty (get "repo" meta))
+            docs= (str-or-empty (get "docs" meta))}
   if (name == "" || version == "" || description == "")
     json-response (json-encode ({error= "Missing required fields: name, version, description"}))
   else
-    publish-check-owner request caller name version description license
+    if ((bad-link? links.website) || (bad-link? links.repo) || (bad-link? links.docs))
+      json-response (json-encode ({error= "website/repo/docs must be http(s):// URLs"}))
+    else
+      publish-check-owner request caller name version description license links
 
 fn publish-check-owner ::: Db FileIO Serve
-  => request caller name version description license
+  => request caller name version description license links
   owner-rows := lookup-pkg-owner name
   if (owner-not-mine? owner-rows (get "id" caller))
     {status= 403
      body= (json-encode ({error= ("Package '" ++ name ++ "' is owned by another user.")}))
      headers= (assoc {} "content-type" "application/json")}
   else
-    do-publish request name version (get "username" caller) description license (get "id" caller)
+    do-publish request name version (get "username" caller) description license (get "id" caller) links
 
 fn lookup-pkg-owner ::: Db
   => name
@@ -874,7 +973,7 @@ fn owner-not-mine? :: _ _ Bool
     (get "owner_id" (head owner-rows)) /= caller-id
 
 fn do-publish ::: FileIO Serve Db
-  => request name version author description license caller-id
+  => request name version author description license caller-id links
   tarball-dir := seeds-storage-dir ++ "/" ++ name
   with default-fs
     fs-mkdir tarball-dir
@@ -884,17 +983,19 @@ fn do-publish ::: FileIO Serve Db
   if (empty? version-exists == false)
     json-response (json-encode ({error= (name ++ " " ++ version ++ " already published")}))
   else
-    publish-write-rows name version author description license caller-id
+    publish-write-rows name version author description license caller-id links
 
 fn lookup-version ::: Db
   => name version
   with default-db
     db-query registry-db "SELECT id FROM versions WHERE package_name = ? AND version = ?" #[name version]
 
+;; Links are latest-publish-wins, same as license: irij.toml is the
+;; source of truth, so removing a link there removes it here.
 fn publish-write-rows ::: Db FileIO Serve
-  => name version author description license caller-id
+  => name version author description license caller-id links
   with default-db
-    db-exec registry-db "INSERT INTO packages (name, owner_id, license, updated) VALUES (?, ?, ?, datetime('now')) ON CONFLICT(name) DO UPDATE SET license = excluded.license, updated = datetime('now')" #[name caller-id license]
+    db-exec registry-db "INSERT INTO packages (name, owner_id, license, website, repo, docs, updated) VALUES (?, ?, ?, ?, ?, ?, datetime('now')) ON CONFLICT(name) DO UPDATE SET license = excluded.license, website = excluded.website, repo = excluded.repo, docs = excluded.docs, updated = datetime('now')" #[name caller-id license links.website links.repo links.docs]
     db-exec registry-db "INSERT INTO versions (package_name, version, description, readme, author) VALUES (?, ?, ?, ?, ?)" #[name version description "" author]
     json-response (json-encode ({ok= true name= name version= version}))
 
@@ -954,7 +1055,7 @@ fn handle-seed-route ::: FileIO Serve
 fn handle-seed-detail
   => name
   with default-db
-    pkg := db-query registry-db "SELECT p.name, u.username AS owner, p.license, p.created FROM packages p JOIN users u ON u.id = p.owner_id WHERE p.name = ?" #[name]
+    pkg := db-query registry-db "SELECT p.name, u.username AS owner, p.license, p.website, p.repo, p.docs, p.created FROM packages p JOIN users u ON u.id = p.owner_id WHERE p.name = ?" #[name]
     if (empty? pkg)
       {status= 404 body= (json-encode ({error= "Seed not found"})) headers= (assoc {} "content-type" "application/json")}
     else
@@ -1003,10 +1104,14 @@ fn docs-page
         (doc-card "hot-redef" "Hot Redef" "invokedynamic + MutableCallSite. The --direct-linking deploy mode.")
         (doc-card "specs" "Specs" "Runtime predicates, contracts, blame tracking.")
         (doc-card "modules" "Modules" "mod/use/pub. Inlining, alias rewriting, blame envelopes.")
+        (doc-card "versioning" "Versioning" "Commit-count releases (MAJOR.MINOR.count), publish guards, dep resolution.")
+        (doc-card "packaging" "Packaging" "Seeds, the irij.toml manifest, irij publish, registry storage.")
         (doc-card "concurrency" "Concurrency" "Virtual threads, structured concurrency, cross-mode dispatch.")
         (doc-card "jvm-capability" "JVM Capability" "Why all Java interop requires ::: JVM.")
+        (doc-card "capabilities" "Capabilities" "cap decls — bridging effect ops to host (Java) providers.")
         (doc-card "stdlib" "Stdlib" "What lives in Java vs Irij. The Phase 3 port.")
         (doc-card "nrepl" "nREPL" "Protocol, sessions, eval vs eval-bytecode.")
+        (doc-card "lsp" "LSP" "irij lsp — editor integration, capabilities.")
         (doc-card "glossary" "Glossary" "Terms used throughout these docs.")])])
 
 ;; Single doc page: shell + marked.js (CDN) + /docs.js (resource)
@@ -1310,11 +1415,11 @@ fn dashboard-body
     (packages-block packages)
     (h3 {style= "margin-top:2rem"} #["API tokens"])
     (tokens-block tokens)
-    (el "form" {action= "/api/tokens" method= "POST" style= "margin-top:1rem;display:flex;gap:.5rem"} #[
-      (el "input" {type= "text" name= "label" placeholder= "Token label (e.g. laptop)" required= "required" style= "flex:1;padding:.4rem"} #[])
-      (el "button" {type= "submit" style= "padding:.4rem 1rem;background:var(--accent);color:#fff;border:none;border-radius:.3rem;cursor:pointer"} #["Create token"])])
-    (el "form" {action= "/logout" method= "POST" style= "margin-top:2rem"} #[
-      (el "button" {type= "submit" style= "background:none;border:1px solid var(--border);padding:.4rem 1rem;border-radius:.3rem;cursor:pointer"} #["Log out"])])]
+    (el "form" {action= "/api/tokens" method= "POST" class= "token-form"} #[
+      (el "input" {type= "text" name= "label" placeholder= "Token label (e.g. laptop)" required= "required"} #[])
+      (el "button" {type= "submit"} #["Create token"])])
+    (el "form" {action= "/logout" method= "POST" class= "logout-form"} #[
+      (el "button" {type= "submit" class= "logout-btn"} #["Log out"])])]
 
 fn dashboard-for-user ::: Db FileIO Serve
   => user new-token
