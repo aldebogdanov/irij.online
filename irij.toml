@@ -17,4 +17,5 @@ description = "Irij language website, seeds registry and playground"
 # (published 0.2.0 crashed every page with a <link> in the head).
 # Once this build deploys and the registry is healthy, `irij publish`
 # vrata 0.2.1 and restore the registry dep:  vrata = "0.2.1"
-vrata = { git = "https://github.com/aldebogdanov/vrata.git", tag = "v0.2.1" }
+vrata = "0.2.11"
+# { git = "https://github.com/aldebogdanov/vrata.git", tag = "v0.2.1" }
