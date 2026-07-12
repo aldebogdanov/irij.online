@@ -14,7 +14,7 @@ use std.auth :open
 use std.random :open
 use std.convert :open
 
-irij-version := "REPLACES_ON_RELEASE"
+irij-version := "REPLACES_IN_RELEASE_CI"
 
 ;; ═══════════════════════════════════════════════════════════════════
 ;; Seed Registry — Database
