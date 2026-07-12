@@ -14,7 +14,7 @@ use std.auth :open
 use std.random :open
 use std.convert :open
 
-irij-version := "v0.8.5"
+irij-version := "REPLACES_ON_RELEASE"
 
 ;; ═══════════════════════════════════════════════════════════════════
 ;; Seed Registry — Database
@@ -1382,7 +1382,7 @@ fn token-row-el
     (span {style= "color:var(--muted);font-size:.85rem"} #[("created " ++ (get "created" t))])
     (el "form" {action= "/api/tokens/delete" method= "POST" style= "display:inline"} #[
       (el "input" {type= "hidden" name= "id" value= (to-str (get "id" t))} #[])
-      (el "button" {type= "submit" style= "background:none;border:none;color:var(--color-error);cursor:pointer"} #["Revoke"])])])
+      (el "button" {type= "submit" style= "background:none;border:none;color:var(--color-error);cursor:pointer;font-size:initial"} #["Revoke"])])])
 
 fn packages-block
   => packages
@@ -1415,11 +1415,12 @@ fn dashboard-body
     (packages-block packages)
     (h3 {style= "margin-top:2rem"} #["API tokens"])
     (tokens-block tokens)
-    (el "form" {action= "/api/tokens" method= "POST" class= "token-form"} #[
-      (el "input" {type= "text" name= "label" placeholder= "Token label (e.g. laptop)" required= "required"} #[])
-      (el "button" {type= "submit"} #["Create token"])])
-    (el "form" {action= "/logout" method= "POST" class= "logout-form"} #[
-      (el "button" {type= "submit" class= "logout-btn"} #["Log out"])])]
+    (div {style= "display:flex;justify-content:space-between;align-items:center"} #[
+      (el "form" {action= "/api/tokens" method= "POST" class= "token-form"} #[
+        (el "input" {type= "text" name= "label" placeholder= "Token label (e.g. laptop)" required= "required"} #[])
+        (el "button" {type= "submit"} #["Create token"])])
+      (el "form" {action= "/logout" method= "POST" class= "logout-form"} #[
+        (el "button" {type= "submit" class= "logout-btn" style= "margin-right:2.5rem"} #["Log out"])])])]
 
 fn dashboard-for-user ::: Db FileIO Serve
   => user new-token
