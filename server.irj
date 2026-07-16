@@ -1093,13 +1093,15 @@ fn docs-page
     html ~ layout "Docs" "/docs" #[
       (h2 {} #["How Irij Works"])
       (p {} #["Design decisions, code structure, and the trade-offs behind each subsystem. Rendered inline from the Irij repo's docs/internals/ directory."])
+      (div (cls "card") #[
+        (h3 {} #[(a {href= "/how-irij-works.html"} #["How Irij Works — single-page overview →"])])
+        (p {} #["The whole under-the-hood story on one page: lexing, AST, bytecode emission, state-machine effects, hot-redef, specs, and concurrency. Start here, then dive into the topic pages below."])])
       (div (cls "feature-grid") #[
-        (doc-card "pipeline" "Pipeline" "Source → AST → values. The two-back-ends split and what it implies.")
+        (doc-card "pipeline" "Pipeline" "Source → AST → bytecode. The single execution model and multi-pass emission.")
         (doc-card "parser" "Parser" "ANTLR4 grammar + indent rewriter. Lexer quirks and reserved-word traps.")
         (doc-card "ast" "AST" "Sealed-interface hierarchies for Decl/Stmt/Expr/Pattern. Why records.")
-        (doc-card "interpreter" "Interpreter (deprecated)" "Tree-walking eval, environments, effect stack, handler dispatch. Scheduled for removal in v0.7.0; kept as the eval-interp nREPL op during transition.")
-        (doc-card "bytecode" "Bytecode Compiler" "ClassEmitter + ASM. Method shape, variable resolution, indirection.")
-        (doc-card "effects" "Effects" "Threaded vs state-machine lowering. Trampoline + lifted locals.")
+        (doc-card "bytecode" "Bytecode Compiler" "ClassEmitter + focused emitter modules + ASM. Method shape, variable resolution, indirection.")
+        (doc-card "effects" "Effects" "State-machine lowering. Continuations, trampoline, lifted locals, handler state.")
         (doc-card "tco" "Tail-Call Optimization" "Self-TCO via GOTO + arg rebind. Mutual TCO trade-offs.")
         (doc-card "hot-redef" "Hot Redef" "invokedynamic + MutableCallSite. The --direct-linking deploy mode.")
         (doc-card "specs" "Specs" "Runtime predicates, contracts, blame tracking.")
@@ -1109,7 +1111,7 @@ fn docs-page
         (doc-card "concurrency" "Concurrency" "Virtual threads, structured concurrency, cross-mode dispatch.")
         (doc-card "jvm-capability" "JVM Capability" "Why all Java interop requires ::: JVM.")
         (doc-card "capabilities" "Capabilities" "cap decls — bridging effect ops to host (Java) providers.")
-        (doc-card "stdlib" "Stdlib" "What lives in Java vs Irij. The Phase 3 port.")
+        (doc-card "stdlib" "Stdlib" "What lives in Java vs Irij. One implementation per builtin.")
         (doc-card "nrepl" "nREPL" "Protocol, sessions, eval vs eval-bytecode.")
         (doc-card "lsp" "LSP" "irij lsp — editor integration, capabilities.")
         (doc-card "glossary" "Glossary" "Terms used throughout these docs.")])])
