@@ -1093,7 +1093,7 @@ fn docs-page
     html ~ layout "Docs" "/docs" #[
       (h2 {} #["How Irij Works"])
       (p {} #["Design decisions, code structure, and the trade-offs behind each subsystem. Rendered inline from the Irij repo's docs/internals/ directory."])
-      (div (cls "card") #[
+      (div {class= "card" style= "margin-bottom:1rem"} #[
         (h3 {} #[(a {href= "/how-irij-works.html"} #["How Irij Works — single-page overview →"])])
         (p {} #["The whole under-the-hood story on one page: lexing, AST, bytecode emission, state-machine effects, hot-redef, specs, and concurrency. Start here, then dive into the topic pages below."])])
       (div (cls "feature-grid") #[
