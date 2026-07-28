@@ -833,7 +833,11 @@
             <strong>Product/sum specs</strong> register in a global descriptor
             registry at <code>&lt;clinit&gt;</code>. Validated values get
             <em>certified</em> — <code>Tagged.specName</code> — enabling an O(1)
-            revalidation fast path.
+            revalidation fast path. A product is <strong>closed</strong>:
+            exactly the declared fields, each satisfying its declared spec.
+            Construction is checked too, which is what makes the fast path
+            honest — an unchecked constructor would be a hole straight through
+            every later validation.
           </li>
           <li>
             <strong>Union types:</strong> a sum spec may list primitive specs as
@@ -917,7 +921,8 @@
           Effects abstract <em>what</em>; capabilities bind <em>how</em>. Stdlib
           effect modules (<code>std.db</code>, <code>std.http</code>,
           <code>std.serve</code>, <code>std.fs</code>, <code>std.session</code>,
-          <code>std.log</code>…) pair a <code>pub effect</code> with a default
+          <code>std.term</code>, <code>std.log</code>…) pair a
+          <code>pub effect</code> with a default
           handler whose clauses call <code>raw-*</code> builtins backed by Java
           capability classes (<code>JdbcCapability</code>,
           <code>ServeCapability</code>, …). Tests swap the handler; production
@@ -938,7 +943,7 @@
 
         <p>
           The standard library is
-          <em>real Irij</em> (<code>src/main/resources/std/*.irj</code>, 18
+          <em>real Irij</em> (<code>src/main/resources/std/*.irj</code>, 19
           modules) except where Java is irreducible: raw access to internal
           collection types, JDBC/HTTP/crypto, and hot arithmetic. Since the
           2026-07 dedup there is

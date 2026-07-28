@@ -14,15 +14,15 @@
   CodeMirror.defineMode('irij', function() {
     var keywords = new Set([
       'fn', 'do', 'if', 'else', 'match', 'spec', 'newtype',
-      'mod', 'use', 'pub', 'with', 'scope', 'effect', 'role',
+      'mod', 'use', 'pub', 'with', 'scope', 'effect', 'party',
       'cap', 'handler', 'impl', 'proto', 'pre', 'post', 'law',
       'contract', 'select', 'enclave', 'forall', 'par-each',
-      'on-failure', 'in', 'out'
+      'on-failure', 'in', 'out', 'for', 'proof'
     ]);
 
     var builtins = new Set([
       'print', 'println', 'to-str', 'dbg',
-      'div', 'abs', 'min', 'max',
+      'quo', 'rem', 'abs', 'min', 'max',
       'head', 'tail', 'length', 'reverse', 'sort',
       'concat', 'take', 'drop', 'to-vec',
       'contains?', 'keys', 'vals', 'get',
