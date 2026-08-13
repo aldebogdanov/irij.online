@@ -257,6 +257,14 @@ fn css
     (rule ".hero h2 em" "font-style:normal;color:var(--accent)")
     (rule ".hero .sub" "color:var(--muted);font-size:1rem;margin:.5rem 0 1rem")
     (rule ".badges" "display:flex;gap:.5rem;justify-content:center;flex-wrap:wrap")
+    ;; ── Hero call-to-action buttons ────────────────────────────
+    (rule ".cta-row" "display:flex;gap:.75rem;justify-content:center;flex-wrap:wrap;margin-top:1.25rem")
+    (rule ".cta" "display:inline-block;padding:.55rem 1.2rem;border-radius:.4rem;border:1px solid var(--accent);color:var(--accent);background:transparent;font-size:.95rem;font-weight:500;text-decoration:none;transition:background .2s,color .2s")
+    (rule ".cta:hover" "background:var(--accent);color:#fff")
+    (rule ".cta-primary" "background:var(--accent);color:#fff")
+    (rule ".cta-primary:hover" "background:var(--accent2);border-color:var(--accent2);color:#fff")
+    ;; Anchor target: keep the heading clear of the viewport edge.
+    (rule "#install" "scroll-margin-top:1.5rem")
     (rule ".badge" "display:inline-block;background:var(--card-bg);border:1px solid var(--border);padding:.3rem .8rem;border-radius:1rem;font-size:.8rem;color:var(--muted)")
     (rule ".badge.primary" "background:var(--accent);color:#fff;border-color:var(--accent)")
     ;; ── Code blocks + syntax colors ─────────────────────────────
@@ -457,7 +465,50 @@ fn home-hero
                          (div (cls "badges") #[(badge irij-version "badge primary")
                                                (badge "JVM" "badge")
                                                (badge "Virtual Threads" "badge")
-                                               (badge "ANTLR4" "badge")])])
+                                               (badge "ANTLR4" "badge")])
+                         (div (cls "cta-row") #[(a {class= "cta cta-primary" href= "#install"} #["Install Irij"])
+                                                (a {class= "cta" href= "/playground"} #["Try in browser"])])])
+
+;; ── Install ──────────────────────────────────────────────────────
+
+fn home-install
+  (-> div {id= "install"} #[
+    (h2 {} #["Install"])
+    (p {} #[(raw "Irij runs on the JVM. All you need is a JDK 21+ (any distribution) and git — the build fetches everything else. Linux, macOS and WSL are supported; on Windows use <code>gradlew.bat</code> instead of <code>./gradlew</code>.")])
+    (div (cls "two-col") #[
+      (div {} #[
+        (h3 {} #["Build and install to PATH"])
+        (code-lines #[
+          "<span class=\"c\">## clone the repo</span>"
+          "git clone https://github.com/aldebogdanov/irij.git"
+          "cd irij"
+          ""
+          "<span class=\"c\">## build + install the launcher</span>"
+          "./gradlew install"])
+        (p {} #[(raw "This writes the runtime to <code>~/.local/lib/irij.jar</code> and an <code>irij</code> launcher script to <code>~/.local/bin/irij</code>. Make sure that directory is on your <code>PATH</code>:")])
+        (code-lines #[
+          "<span class=\"c\">## add to ~/.bashrc or ~/.zshrc</span>"
+          "export PATH=\"$HOME/.local/bin:$PATH\""])
+        (p {} #[(raw "Prefer not to install? <code>./gradlew shadowJar</code> alone leaves a runnable JAR at <code>build/libs/irij.jar</code> — run it with <code>java -jar build/libs/irij.jar file.irj</code>.")])])
+      (div {} #[
+        (h3 {} #["Verify and take it for a spin"])
+        (code-lines #[
+          "irij --version                <span class=\"c\">## engine version</span>"
+          "irij                          <span class=\"c\">## interactive REPL</span>"
+          ""
+          "echo 'println \"Hello, Irij!\"' > hello.irj"
+          "irij hello.irj"])
+        (h3 {} #["Everyday commands"])
+        (code-lines #[
+          "irij file.irj                 <span class=\"c\">## run a source file</span>"
+          "irij test                     <span class=\"c\">## run tests/test-*.irj</span>"
+          "irij install                  <span class=\"c\">## fetch seeds from irij.toml</span>"
+          "irij build                    <span class=\"c\">## package a self-contained JAR</span>"
+          "irij publish                  <span class=\"c\">## publish a seed to the registry</span>"
+          "irij lsp                      <span class=\"c\">## LSP server for editors</span>"
+          "irij --nrepl-server           <span class=\"c\">## nREPL on port 7888</span>"
+          "irij help                     <span class=\"c\">## full command list</span>"])
+        (p {} #[(raw "Emacs users: <code>editors/emacs/irij-mode.el</code> and <code>irij-nrepl.el</code> ship in the repo.")])])])])
 
 ;; ── Feature cards ────────────────────────────────────────────────
 
@@ -652,6 +703,8 @@ fn home-page
     html ~ layout "Home" "/" #[
       (home-hero ())
       (home-features ())
+      (div (cls "section-sep") #[])
+      (home-install ())
       (div (cls "section-sep") #[])
       (h2 {} #["Code Examples"])
       (div (cls "two-col") #[(ex-specs-and-matching ()) (ex-effects ())])

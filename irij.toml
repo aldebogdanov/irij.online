@@ -7,7 +7,7 @@ name = "irij.online"
 # count (see ./scripts/release). Bump the base by hand only for a MINOR site
 # feature or a MAJOR rework; engine bumps and small fixes just ride the commit
 # count.
-version = "1.0"
+version = "1.1"
 description = "Irij language website, seeds registry and playground"
 
 [seeds]
