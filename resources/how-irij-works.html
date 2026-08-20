@@ -160,6 +160,9 @@
         border-radius: 4px;
         padding: 0.08em 0.35em;
         font-size: 0.88em;
+        /* Long qualified names (stack frames, package paths) used to push
+           the page wider than the viewport on phones. */
+        overflow-wrap: anywhere;
       }
       pre {
         background: var(--code-bg);
@@ -253,6 +256,12 @@
         }
         .container {
           padding: 0 1.2rem;
+        }
+        /* Narrow phones: let cells shrink below the desktop min-width so
+           two-column tables fit without a scrollbar of their own. */
+        th,
+        td {
+          min-width: 9rem;
         }
       }
     </style>
