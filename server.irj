@@ -534,7 +534,7 @@ fn home-install
 ;; ── Feature cards ────────────────────────────────────────────────
 
 fn home-features
-  (-> div (cls "feature-grid") #[(card "Algebraic Effects" "First-class effect system with deep handlers. Mock any side effect in tests. State-machine bytecode lowering for hot perform-loops.") (card "Parametric Effect Rows" "Higher-order fns declare row variables: fold :: (Fn):eff _ _ _ ::: eff. The callback's effect row binds eff and propagates into the caller's row at each call site. Compile-time enforcement, no runtime erasure.") (card "Runtime Specs" "Malli-inspired specs replace types. Certify values at construction, validate at boundaries. Spec-annotated pub fns are mandatory; lint enforces it.") (card "Contracts" "Pre/post conditions on functions, in/out contracts at module boundaries. Blame tracking — pre-failure accuses the caller, post-failure accuses the implementation.") (card "Structured Concurrency" "scope/fork/await, par, race, timeout. Java virtual threads with auto-cancellation. Spawned fibers inherit effect row + session namespace.") (card "Terminal UI" "std.term gives raw mode, decoded key/mouse/resize events and wcwidth as an effect — so a mock handler makes a whole TUI assertable as a string, with no tty. The uzor seed builds cell buffers, layout, widgets and an app loop on top.") (card "Pipeline Operators" "|> pipeline, @ map, /? filter, /+ fold. >> composition, ~ apply-to-rest.") (card "Module System & Packages" "use mod.name :open / :as alias / { selective }. Git deps via irij.toml. Pub/private exports. Effect-gated APIs.") (card "Bytecode-only Execution" "irij build emits a self-contained JAR. State-machine handler lowering is the single execution path — no interpreter, no threaded fallback, no ambiguity.") (card "Hot Redef + Java Interop" "REPL-driven fn redefinition via invokedynamic + MutableCallSite. Java classes via Class/member, dot-access, ::: JVM capability tracking.")])
+  (-> div (cls "feature-grid") #[(card "Algebraic Effects" "First-class effect system with deep handlers. Mock any side effect in tests. State-machine bytecode lowering for hot perform-loops.") (card "Parametric Effect Rows" "Higher-order fns declare row variables: fold :: (Fn):eff _ _ _ ::: eff. The callback's effect row binds eff and propagates into the caller's row at each call site. Compile-time enforcement, no runtime erasure.") (card "Runtime Specs" "Malli-inspired specs replace types. Certify values at construction, validate at boundaries. Spec-annotated pub fns are mandatory; lint enforces it.") (card "Contracts" "Pre/post conditions on functions, in/out contracts at module boundaries. Blame tracking — pre-failure accuses the caller, post-failure accuses the implementation.") (card "Structured Concurrency" "scope/fork/await, par, race, timeout. Java virtual threads with auto-cancellation. Spawned fibers inherit effect row + session namespace.") (card "Terminal UI" "std.term gives raw mode, decoded key/mouse/resize events and wcwidth as an effect — so a mock handler makes a whole TUI assertable as a string, with no tty. The uzor seed builds cell buffers, layout, widgets and an app loop on top.") (card "Pipeline Operators" "|> pipeline, @ map, /? filter, /+ fold. >> composition, ~ apply-to-rest.") (card "Module System & Packages" "use mod.name :open / :as alias / { selective }. Git deps via irij.toml. Pub/private exports. Effect-gated APIs.") (card "Bytecode-only Execution" "irij build emits a self-contained JAR. State-machine handler lowering is the single execution path — no interpreter, no threaded fallback, no ambiguity.") (card "Hot Redef + Java Interop" "REPL-driven fn redefinition via invokedynamic + MutableCallSite. Java classes via Class/member, dot-access, ::: JVM capability tracking.") (card "Model-Based Testing" "A model declaration binds a Quint specification to the code implementing it — one clause per action, with the spec's nondet picks bound by name. Quint generates traces, Irij replays them and fails at the first diverging step; Apalache proves invariants. Generating needs the quint binary, replaying a committed trace needs nothing, because the CLI is reached through an effect.")])
 
 ;; ── Code examples ────────────────────────────────────────────────
 
@@ -670,6 +670,19 @@ fn ex-protocols
     "println (show #[<span class=\"n\">1 2 3</span>])"
   ])])
 
+fn ex-model
+  (-> div {} #[(h3 {} #["Model-Based Testing"]) (code-lines #[
+    "<span class=\"c\">;; a Quint spec generates the traces; Irij replays them</span>"
+    "<span class=\"k\">model</span> bank <span class=\"k\">::</span> <span class=\"s\">\"spec/bank.qnt\"</span> <span class=\"n\">:pure</span>"
+    "  start                  <span class=\"op\">=></span> {balances= {alice= <span class=\"n\">0</span>}}"
+    "  deposit  st who amount <span class=\"op\">=></span> {...st balances= (credit st.balances who amount)}"
+    "  overdraft st _ _       <span class=\"op\">=></span> {...st last-error= <span class=\"s\">\"no funds\"</span>}"
+    ""
+    "r1 := test <span class=\"s\">\"bank conforms\"</span> (<span class=\"op\">-></span> qcheck bank {traces= <span class=\"n\">50</span>})"
+    "<span class=\"c\">;; diverged at step 4, action deposit</span>"
+    "<span class=\"c\">;;   expected {alice= 11}  actual {alice= 12}</span>"
+  ])])
+
 ;; ── Roadmap ──────────────────────────────────────────────────────
 
 fn phase-row
@@ -715,6 +728,7 @@ fn home-roadmap
                          phase-row "next" "chereda-redis" "Redis backend for chereda; opt-in jedis dep gated by seed import" ++
                          phase-row "done" "butterfly" "Reactive signal graph in Irij: signals, cached computes with automatic dependency tracking, watchers, batching, snapshot/restore time travel" ++
                          phase-row "done" "uzor" "Terminal UI toolkit on std.term: cell buffers with per-line diffing, constraint layout, widgets, an app loop, mouse, overlays and themes — the rendering path is pure, so a whole TUI is tested without a terminal" ++
+                         phase-row "done" "v0.9.0" "Model-based testing: the `model` declaration binds a Quint specification to the code implementing it, `std.quint` replays generated traces and `verify` proves invariants with Apalache. Generation is an effect, so a committed trace replays in CI with no Quint installed. Replaces the `law` property testing removed in v0.6.12 — sampling is not proof, and the tool that samples also proves." ++
                          phase-row "planned" "Future" "Linear types (capability + channel safety); channels (send/recv/select); choreographic programming; refinement types; content-addressed code; multi-resume effects (search/nondet/probabilistic); GraalVM native image"))
 
 ;; ── Full home page ───────────────────────────────────────────────
@@ -732,7 +746,7 @@ fn home-page
       (div {class= "two-col" style= "margin-top:2rem"} #[(ex-parametric-effects ()) (ex-contracts ())])
       (div {class= "two-col" style= "margin-top:2rem"} #[(ex-pipelines ()) (ex-concurrency ())])
       (div {class= "two-col" style= "margin-top:2rem"} #[(ex-imperative ()) (ex-collections ())])
-      (div {class= "two-col" style= "margin-top:2rem"} #[(ex-protocols ()) (div {} #[])])
+      (div {class= "two-col" style= "margin-top:2rem"} #[(ex-protocols ()) (ex-model ())])
       (div (cls "section-sep") #[])
       (h2 {} #["Roadmap"])
       (p {} #["Irij is in active development. Current status:"])
@@ -1191,6 +1205,7 @@ fn docs-page
         (doc-card "jvm-capability" "JVM Capability" "Why all Java interop requires ::: JVM.")
         (doc-card "capabilities" "Capabilities" "cap decls — bridging effect ops to host (Java) providers.")
         (doc-card "stdlib" "Stdlib" "What lives in Java vs Irij. One implementation per builtin.")
+        (doc-card "quint" "Quint" "Model-based testing against a formal spec. ITF decoding, the two model shapes, and what Quint actually emits.")
         (doc-card "nrepl" "nREPL" "Protocol, sessions, eval vs eval-bytecode.")
         (doc-card "lsp" "LSP" "irij lsp — editor integration, capabilities.")
         (doc-card "glossary" "Glossary" "Terms used throughout these docs.")])])
