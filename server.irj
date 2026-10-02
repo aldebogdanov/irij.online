@@ -17,6 +17,22 @@ use std.convert :open
 irij-version := "REPLACES_IN_RELEASE_CI"
 
 ;; ═══════════════════════════════════════════════════════════════════
+;; Run mode
+;; ═══════════════════════════════════════════════════════════════════
+;;
+;; `server.jar` serves the site and the registry. `server.jar playground`
+;; serves only the playground's evaluation API on PLAYGROUND_PORT (8081)
+;; and opens no registry state, so it can run as its own confined process:
+;; visitors' code then shares a JVM with nothing worth stealing. With
+;; IRIJ_PLAYGROUND=external the site leaves those routes to that process
+;; (Caddy sends them there) and never evaluates visitors' code itself.
+;; Unset, as in local development, the site serves them in-process.
+
+run-mode := if (empty? (program-args ())) "site" else (head (program-args ()))
+playground-external := (env "IRIJ_PLAYGROUND" "") == "external"
+playground-port := to-int (env "PLAYGROUND_PORT" "8081")
+
+;; ═══════════════════════════════════════════════════════════════════
 ;; Seed Registry — Database
 ;; ═══════════════════════════════════════════════════════════════════
 
@@ -203,10 +219,11 @@ fn open-registry-db ::: Db Console
   init-registry-db conn
   conn
 
-init-registry-dirs ()
 registry-db :! ()
-with default-db
-  registry-db <- open-registry-db ()
+if (run-mode == "site")
+  init-registry-dirs ()
+  with default-db
+    registry-db <- open-registry-db ()
 
 ;; ═══════════════════════════════════════════════════════════════════
 ;; CSS
@@ -534,7 +551,7 @@ fn home-install
 ;; ── Feature cards ────────────────────────────────────────────────
 
 fn home-features
-  (-> div (cls "feature-grid") #[(card "Algebraic Effects" "First-class effect system with deep handlers. Mock any side effect in tests. State-machine bytecode lowering for hot perform-loops.") (card "Parametric Effect Rows" "Higher-order fns declare row variables: fold :: (Fn):eff _ _ _ ::: eff. The callback's effect row binds eff and propagates into the caller's row at each call site. Compile-time enforcement, no runtime erasure.") (card "Runtime Specs" "Malli-inspired specs replace types. Certify values at construction, validate at boundaries. Spec-annotated pub fns are mandatory; lint enforces it.") (card "Contracts" "Pre/post conditions on functions, in/out contracts at module boundaries. Blame tracking — pre-failure accuses the caller, post-failure accuses the implementation.") (card "Structured Concurrency" "scope/fork/await, par, race, timeout. Java virtual threads with auto-cancellation. Spawned fibers inherit effect row + session namespace.") (card "Terminal UI" "std.term gives raw mode, decoded key/mouse/resize events and wcwidth as an effect — so a mock handler makes a whole TUI assertable as a string, with no tty. The uzor seed builds cell buffers, layout, widgets and an app loop on top.") (card "Pipeline Operators" "|> pipeline, @ map, /? filter, /+ fold. >> composition, ~ apply-to-rest.") (card "Module System & Packages" "use mod.name :open / :as alias / { selective }. Git deps via irij.toml. Pub/private exports. Effect-gated APIs.") (card "Bytecode-only Execution" "irij build emits a self-contained JAR. State-machine handler lowering is the single execution path — no interpreter, no threaded fallback, no ambiguity.") (card "Hot Redef + Java Interop" "REPL-driven fn redefinition via invokedynamic + MutableCallSite. Java classes via Class/member, dot-access, ::: JVM capability tracking.") (card "Model-Based Testing" "A model declaration binds a Quint specification to the code implementing it — one clause per action, with the spec's nondet picks bound by name. Quint generates traces, Irij replays them and fails at the first diverging step; Apalache proves invariants. Generating needs the quint binary, replaying a committed trace needs nothing, because the CLI is reached through an effect.")])
+  (-> div (cls "feature-grid") #[(card "Algebraic Effects" "First-class effect system with deep handlers. Mock any side effect in tests. State-machine bytecode lowering for hot perform-loops.") (card "Parametric Effect Rows" "Higher-order fns declare row variables: fold :: (Fn):eff _ _ _ ::: eff. The callback's effect row binds eff and propagates into the caller's row at each call site. Compile-time enforcement, no runtime erasure.") (card "Runtime Specs" "Malli-inspired specs replace types. Certify values at construction, validate at boundaries. Spec-annotated pub fns are mandatory; lint enforces it.") (card "Contracts" "Pre/post conditions on functions, in/out contracts at module boundaries. Blame tracking — pre-failure accuses the caller, post-failure accuses the implementation.") (card "Structured Concurrency" "scope/fork/await, par, race, timeout. Java virtual threads with auto-cancellation. Spawned fibers inherit effect row + session namespace.") (card "Child Processes" "std.proc runs a command to completion (stdin, timeout, both streams) or starts one and talks to it a line at a time. It is an effect like any other, so a test drives a whole pipeline of git, compilers and CLIs through a scripted handler.") (card "Terminal UI" "std.term gives raw mode, decoded key/mouse/resize events and wcwidth as an effect — so a mock handler makes a whole TUI assertable as a string, with no tty. The uzor seed builds cell buffers, layout, widgets and an app loop on top.") (card "Pipeline Operators" "|> pipeline, @ map, /? filter, /+ fold. >> composition, ~ apply-to-rest.") (card "Module System & Packages" "use mod.name :open / :as alias / { selective }. Git deps via irij.toml. Pub/private exports. Effect-gated APIs.") (card "Bytecode-only Execution" "irij build emits a self-contained JAR. State-machine handler lowering is the single execution path — no interpreter, no threaded fallback, no ambiguity.") (card "Hot Redef + Java Interop" "REPL-driven fn redefinition via invokedynamic + MutableCallSite. Java classes via Class/member, dot-access, ::: JVM capability tracking.") (card "Model-Based Testing" "A model declaration binds a Quint specification to the code implementing it — one clause per action, with the spec's nondet picks bound by name. Quint generates traces, Irij replays them and fails at the first diverging step; Apalache proves invariants. Generating needs the quint binary, replaying a committed trace needs nothing, because the CLI is reached through an effect.")])
 
 ;; ── Code examples ────────────────────────────────────────────────
 
@@ -729,6 +746,9 @@ fn home-roadmap
                          phase-row "done" "butterfly" "Reactive signal graph in Irij: signals, cached computes with automatic dependency tracking, watchers, batching, snapshot/restore time travel" ++
                          phase-row "done" "uzor" "Terminal UI toolkit on std.term: cell buffers with per-line diffing, constraint layout, widgets, an app loop, mouse, overlays and themes — the rendering path is pure, so a whole TUI is tested without a terminal" ++
                          phase-row "done" "v0.9.0" "Model-based testing: the `model` declaration binds a Quint specification to the code implementing it, `std.quint` replays generated traces and `verify` proves invariants with Apalache. Generation is an effect, so a committed trace replays in CI with no Quint installed. Replaces the `law` property testing removed in v0.6.12 — sampling is not proof, and the tool that samples also proves." ++
+                         phase-row "done" "v0.9.235" "std.proc: child processes as an effect (run to completion, or start and stream a line at a time); program arguments (`irij app.irj a b`, built jars) via std.env's env-args; Java methods on hidden JDK classes resolve through their public supertype; `model` is a keyword only at a declaration head" ++
+                         phase-row "done" "v0.9.236" "Keywords are field names: `cand.spec`, `{with= …}`, product-spec fields and destructuring — data decoded from JSON or a Quint spec names its fields freely" ++
+                         phase-row "done" "v0.9.237" "`try` and `on-failure` hand back the raised value: `error {code= :missing}` stays a map through `try`, fibers and Java calls, so callers match on fields instead of parsing text" ++
                          phase-row "planned" "Future" "Linear types (capability + channel safety); channels (send/recv/select); choreographic programming; refinement types; content-addressed code; multi-resume effects (search/nondet/probabilistic); GraalVM native image"))
 
 ;; ── Full home page ───────────────────────────────────────────────
@@ -1598,16 +1618,21 @@ fn handle-signup ::: Db Random FileIO Serve
   else
     signup-check-pw username email password
 
-routes := #[
-  (route "GET" "/" home-page)
-  (route "GET" "/playground" playground-page)
-  (route "GET" "/docs" docs-page)
-  (route-prefix "GET" "/docs/" doc-detail-page)
+;; Everything that evaluates a visitor's code. Caddy routes these paths to
+;; the playground process when it runs separately (IRIJ_PLAYGROUND=external).
+playground-routes := #[
   (route "POST" "/eval" handle-eval)
   (route "POST" "/api/session" handle-session-create)
   (route "POST" "/api/session/eval" handle-session-eval)
   (route "POST" "/api/session/destroy" handle-session-destroy)
   (route "GET" "/api/session/stream" handle-session-stream)
+]
+
+site-routes := #[
+  (route "GET" "/" home-page)
+  (route "GET" "/playground" playground-page)
+  (route "GET" "/docs" docs-page)
+  (route-prefix "GET" "/docs/" doc-detail-page)
   (route "GET" "/api/examples" handle-examples)
   (route "GET" "/seeds" seeds-page)
   (route-prefix "GET" "/seeds/" seed-detail-page)
@@ -1624,5 +1649,12 @@ routes := #[
   (route "POST" "/api/tokens/delete" handle-token-delete)
 ]
 
-with default-serve
-  serve 8080 (router routes)
+routes := if playground-external site-routes else (site-routes ++ playground-routes)
+
+if (run-mode == "playground")
+  println ("irij.online playground on :" ++ to-str playground-port)
+  with default-serve
+    serve playground-port (router playground-routes)
+else
+  with default-serve
+    serve 8080 (router routes)

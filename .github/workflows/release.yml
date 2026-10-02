@@ -95,6 +95,24 @@ jobs:
           fi
           echo "Smoke test passed: server.jar serves HTTP 200"
 
+      # Production runs the playground as its own confined process
+      # (`server.jar playground`, see the servers repo). It must evaluate code
+      # and must not need the registry's state.
+      - name: Smoke-test the playground process
+        run: |
+          IRIJ_ONLINE_WORKDIR=/nonexistent PLAYGROUND_PORT=8081 \
+            java --enable-native-access=ALL-UNNAMED -jar server.jar playground &
+          PG_PID=$!
+          sleep 5
+          OUT=$(curl -s -X POST http://localhost:8081/eval -d '{"code":"println 42"}')
+          kill $PG_PID || true
+          echo "$OUT"
+          if ! echo "$OUT" | grep -q '"stdout":"42'; then
+            echo "playground process did not evaluate code" >&2
+            exit 1
+          fi
+          echo "Smoke test passed: the playground process evaluates code"
+
       - name: Publish GitHub Release
         uses: softprops/action-gh-release@v2
         with:
