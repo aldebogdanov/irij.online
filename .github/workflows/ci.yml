@@ -46,3 +46,14 @@ jobs:
             exit 1
           fi
           echo "Smoke test passed: HTTP 200 with HTML response"
+
+      - name: Playground process evaluates code and needs no state
+        run: |
+          IRIJ_ONLINE_WORKDIR=/nonexistent PLAYGROUND_PORT=8081 \
+            java --enable-native-access=ALL-UNNAMED -jar irij.jar --no-spec-lint server.irj playground &
+          PG_PID=$!
+          sleep 5
+          OUT=$(curl -s -X POST http://localhost:8081/eval -d '{"code":"println 42"}')
+          kill $PG_PID || true
+          echo "$OUT"
+          echo "$OUT" | grep -q '"stdout":"42' || { echo "playground process did not evaluate code" >&2; exit 1; }
