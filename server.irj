@@ -751,6 +751,7 @@ fn home-roadmap
                          phase-row "done" "v0.9.237" "`try` and `on-failure` hand back the raised value: `error {code= :missing}` stays a map through `try`, fibers and Java calls, so callers match on fields instead of parsing text" ++
                          phase-row "done" "v0.9.239" "`conj` adds to a Set; a pure `model` may name a `view` that renders state the way the spec's variables look, so a kernel with its own representation replays Quint traces directly" ++
                          phase-row "done" "v0.9.270" "Security audit: `serve` hands out only resources/, PBKDF2 password hashes, a stoppable playground, safe seed fetching; Int never overflows; rationals (`2/3`); a module's names are its own; persistent vectors, maps and sets (building one element at a time is linear); piped `read-line`" ++
+                         phase-row "done" "v0.9.273" "Compile errors name functions as written and say which file they come from" ++
                          phase-row "planned" "Future" "Linear types (capability + channel safety); channels (send/recv/select); choreographic programming; refinement types; content-addressed code; multi-resume effects (search/nondet/probabilistic); GraalVM native image"))
 
 ;; ── Full home page ───────────────────────────────────────────────
