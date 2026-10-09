@@ -754,6 +754,8 @@ fn home-roadmap
                          phase-row "done" "v0.9.273" "Compile errors name functions as written and say which file they come from" ++
                          phase-row "done" "v0.9.275" "`with m.handler` works inside another `with`" ++
                          phase-row "done" "v0.9.277" "Imports are enforced: a file reaches only what it declares, imports or has as a builtin, and each error names the `use` line to add; a local shadows an alias; `pub use` re-exports" ++
+                         phase-row "done" "v0.9.279" "Top-level code sees a top-level binding's current value, not its first one" ++
+                         phase-row "done" "v0.9.299" "Specs, variants and effects through an import alias (`:: m.Mode`, `m.Calm`, `::: m.Tick`), and std, tests and examples import qualified; effect ops in `match` arms and inline `if`s; each `if` branch is its own scope; definitions may share a builtin's name; `newtype` compiles" ++
                          phase-row "planned" "Future" "Linear types (capability + channel safety); channels (send/recv/select); choreographic programming; refinement types; content-addressed code; multi-resume effects (search/nondet/probabilistic); GraalVM native image"))
 
 ;; ── Full home page ───────────────────────────────────────────────
