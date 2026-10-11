@@ -2,17 +2,20 @@
 ;; Run: irij server.irj
 ;; Visit: http://localhost:8080
 
-use vrata.html :open
-use vrata.css :open
-use vrata.page :open
-use std.serve :open
-use std.db :open
-use std.time :open
-use std.datastar :open
-use std.list :open
-use std.auth :open
-use std.random :open
-use std.convert :open
+use vrata.html {a cls code div el footer h2 h3 header img link-tag main p pre-el raw render span strong}
+use vrata.css {media rule stylesheet}
+use vrata.page :as page
+use std.serve :as serve
+use std.serve {Serve}
+use std.db :as db
+use std.db {Db}
+use std.time :as time
+use std.time {Time}
+use std.datastar :as datastar
+use std.list :as list
+use std.auth :as auth
+use std.random :as random
+use std.convert :as convert
 
 irij-version := "REPLACES_IN_RELEASE_CI"
 
@@ -30,7 +33,7 @@ irij-version := "REPLACES_IN_RELEASE_CI"
 
 run-mode := if (empty? (program-args ())) "site" else (head (program-args ()))
 playground-external := (env "IRIJ_PLAYGROUND" "") == "external"
-playground-port := to-int (env "PLAYGROUND_PORT" "8081")
+playground-port := convert.to-int (env "PLAYGROUND_PORT" "8081")
 
 ;; ═══════════════════════════════════════════════════════════════════
 ;; Seed Registry — Database
@@ -50,11 +53,12 @@ seeds-db-path := seeds-db-dir ++ "/registry.db"
 seeds-storage-dir := workdir ++ "/seeds"
 
 ;; Ensure data dirs exist
-use std.fs :open
+use std.fs :as fs
+use std.fs {FileIO}
 
 fn init-registry-dirs ::: Console FileIO
   => _
-  with default-fs
+  with fs.default-fs
     fs-mkdir seeds-db-dir
     fs-mkdir seeds-storage-dir
 
@@ -77,7 +81,7 @@ fn reserved-usernames :: Vec
 ;; Initialize DB schema
 fn init-registry-db ::: Console
   => conn
-  with default-db
+  with db.default-db
     ;; ── 8.2c: users + tokens FIRST (other tables FK-reference them) ─
     ;; users.pw_hash is "<salt>$<sha256>" via std.auth.hash-password.
     ;; NULL pw_hash = reserved username (cannot log in or own tokens).
@@ -120,7 +124,7 @@ fn init-registry-db ::: Console
 fn add-owner-id-column-if-missing ::: Db Console
   => conn
   cols := db-query conn "PRAGMA table_info(packages)" #[]
-  has-col? := fold (acc col -> acc || (col.name == "owner_id")) false cols
+  has-col? := list.fold (acc col -> acc || (col.name == "owner_id")) false cols
   if has-col?
     ()
   else
@@ -132,7 +136,7 @@ fn add-owner-id-column-if-missing ::: Db Console
 fn add-link-column-if-missing ::: Db Console
   => conn col
   cols := db-query conn "PRAGMA table_info(packages)" #[]
-  has-col? := fold (acc c -> acc || (c.name == col)) false cols
+  has-col? := list.fold (acc c -> acc || (c.name == col)) false cols
   if has-col?
     ()
   else
@@ -164,9 +168,9 @@ fn seed-admin-password ::: Db Console
 
 fn set-admin-password ::: Db Console
   => conn pw
-  with default-random
-    salt := new-salt ()
-    pw-hash := hash-password salt pw
+  with random.default-random
+    salt := auth.new-salt ()
+    pw-hash := auth.hash-password salt pw
     db-exec conn "UPDATE users SET pw_hash = ? WHERE username = 'aldebogdanov'" #[pw-hash]
     println "Admin password seeded for aldebogdanov"
 
@@ -199,7 +203,7 @@ fn backfill-package-owners ::: Db Console
 fn drop-legacy-owner-column-if-present ::: Db Console
   => conn
   cols := db-query conn "PRAGMA table_info(packages)" #[]
-  has-legacy? := fold (acc col -> acc || (col.name == "owner")) false cols
+  has-legacy? := list.fold (acc col -> acc || (col.name == "owner")) false cols
   if has-legacy?
     db-exec conn "ALTER TABLE packages DROP COLUMN owner" #[]
   else
@@ -222,7 +226,7 @@ fn open-registry-db ::: Db Console
 registry-db :! ()
 if (run-mode == "site")
   init-registry-dirs ()
-  with default-db
+  with db.default-db
     registry-db <- open-registry-db ()
 
 ;; ═══════════════════════════════════════════════════════════════════
@@ -487,7 +491,7 @@ fn head-extras :: _ #[_] _
                    (link-tag {rel= "stylesheet" href= "https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=JetBrains+Mono:wght@400&family=Roboto+Slab:wght@700&display=swap"})] ++ (og-tags ttl) ++ extras)
 
 fn layout-head-extra :: _ #[_] _ #[_] _
-  (ttl h-extras active body-children -> page (ttl ++ " — Irij") (css ()) (head-extras ttl h-extras) #[(div (cls "container") #[(header (cls "site-header") #[(div (cls "inner") #[(a {class= "logo" href= "/"} #[(img {src= "/Irij.png" alt= "Irij" class= "logo-img"})]) (make-nav active)])]) (main {} body-children) (footer {} #["Irij " ++ irij-version ++ " — Where contracts meet effects"])])])
+  (ttl h-extras active body-children -> page.page (ttl ++ " — Irij") (css ()) (head-extras ttl h-extras) #[(div (cls "container") #[(header (cls "site-header") #[(div (cls "inner") #[(a {class= "logo" href= "/"} #[(img {src= "/Irij.png" alt= "Irij" class= "logo-img"})]) (make-nav active)])]) (main {} body-children) (footer {} #["Irij " ++ irij-version ++ " — Where contracts meet effects"])])])
 
 fn layout
   (ttl active body-children -> layout-head-extra ttl #[] active body-children)
@@ -551,7 +555,7 @@ fn home-install
 ;; ── Feature cards ────────────────────────────────────────────────
 
 fn home-features
-  (-> div (cls "feature-grid") #[(card "Algebraic Effects" "First-class effect system with deep handlers. Mock any side effect in tests. State-machine bytecode lowering for hot perform-loops.") (card "Parametric Effect Rows" "Higher-order fns declare row variables: fold :: (Fn):eff _ _ _ ::: eff. The callback's effect row binds eff and propagates into the caller's row at each call site. Compile-time enforcement, no runtime erasure.") (card "Runtime Specs" "Malli-inspired specs replace types. Certify values at construction, validate at boundaries. Spec-annotated pub fns are mandatory; lint enforces it.") (card "Contracts" "Pre/post conditions on functions, in/out contracts at module boundaries. Blame tracking — pre-failure accuses the caller, post-failure accuses the implementation.") (card "Structured Concurrency" "scope/fork/await, par, race, timeout. Java virtual threads with auto-cancellation. Spawned fibers inherit effect row + session namespace.") (card "Child Processes" "std.proc runs a command to completion (stdin, timeout, both streams) or starts one and talks to it a line at a time. It is an effect like any other, so a test drives a whole pipeline of git, compilers and CLIs through a scripted handler.") (card "Terminal UI" "std.term gives raw mode, decoded key/mouse/resize events and wcwidth as an effect — so a mock handler makes a whole TUI assertable as a string, with no tty. The uzor seed builds cell buffers, layout, widgets and an app loop on top.") (card "Pipeline Operators" "|> pipeline, @ map, /? filter, /+ fold. >> composition, ~ apply-to-rest.") (card "Module System & Packages" "use mod.name :open / :as alias / { selective }. Git deps via irij.toml. Pub/private exports. Effect-gated APIs.") (card "Bytecode-only Execution" "irij build emits a self-contained JAR. State-machine handler lowering is the single execution path — no interpreter, no threaded fallback, no ambiguity.") (card "Hot Redef + Java Interop" "REPL-driven fn redefinition via invokedynamic + MutableCallSite. Java classes via Class/member, dot-access, ::: JVM capability tracking.") (card "Model-Based Testing" "A model declaration binds a Quint specification to the code implementing it — one clause per action, with the spec's nondet picks bound by name. Quint generates traces, Irij replays them and fails at the first diverging step; Apalache proves invariants. Generating needs the quint binary, replaying a committed trace needs nothing, because the CLI is reached through an effect.")])
+  (-> div (cls "feature-grid") #[(card "Algebraic Effects" "First-class effect system with deep handlers. Mock any side effect in tests. State-machine bytecode lowering for hot perform-loops.") (card "Parametric Effect Rows" "Higher-order fns declare row variables: fold :: (Fn):eff _ _ _ ::: eff. The callback's effect row binds eff and propagates into the caller's row at each call site. Compile-time enforcement, no runtime erasure.") (card "Runtime Specs" "Malli-inspired specs replace types. Certify values at construction, validate at boundaries. Spec-annotated pub fns are mandatory; lint enforces it.") (card "Contracts" "Pre/post conditions on functions, in/out contracts at module boundaries. Blame tracking — pre-failure accuses the caller, post-failure accuses the implementation.") (card "Structured Concurrency" "scope/fork/await, par, race, timeout. Java virtual threads with auto-cancellation. Spawned fibers inherit effect row + session namespace.") (card "Child Processes" "std.proc runs a command to completion (stdin, timeout, both streams) or starts one and talks to it a line at a time. It is an effect like any other, so a test drives a whole pipeline of git, compilers and CLIs through a scripted handler.") (card "Terminal UI" "std.term gives raw mode, decoded key/mouse/resize events and wcwidth as an effect — so a mock handler makes a whole TUI assertable as a string, with no tty. The uzor seed builds cell buffers, layout, widgets and an app loop on top.") (card "Pipeline Operators" "|> pipeline, @ map, /? filter, /+ fold. >> composition, ~ apply-to-rest.") (card "Module System & Packages" "use mod.name :as alias, then alias.name — for specs, variants and effects too (:: m.Mode, ::: m.Tick); { selective } for a few constant names. Each file reaches only what it imports. Git deps via irij.toml. Pub/private exports. Effect-gated APIs.") (card "Bytecode-only Execution" "irij build emits a self-contained JAR. State-machine handler lowering is the single execution path — no interpreter, no threaded fallback, no ambiguity.") (card "Hot Redef + Java Interop" "REPL-driven fn redefinition via invokedynamic + MutableCallSite. Java classes via Class/member, dot-access, ::: JVM capability tracking.") (card "Model-Based Testing" "A model declaration binds a Quint specification to the code implementing it — one clause per action, with the spec's nondet picks bound by name. Quint generates traces, Irij replays them and fails at the first diverging step; Apalache proves invariants. Generating needs the quint binary, replaying a committed trace needs nothing, because the CLI is reached through an effect.")])
 
 ;; ── Code examples ────────────────────────────────────────────────
 
@@ -762,7 +766,7 @@ fn home-roadmap
 
 fn home-page
   (req ->
-    html ~ layout "Home" "/" #[
+    serve.html ~ layout "Home" "/" #[
       (home-hero ())
       (home-features ())
       (div (cls "section-sep") #[])
@@ -805,22 +809,23 @@ playground-body := div (cls "pg-wrap") pg-children
 
 fn playground-page
   => req
-  html ~ layout-head-extra "Playground" pg-head-extras "/playground" #[(h2 {} #["Playground"]) (p (cls "sub") #["Write Irij code in the browser. Alt+Enter: eval form at cursor. Ctrl+Enter: eval all."]) playground-body]
+  serve.html ~ layout-head-extra "Playground" pg-head-extras "/playground" #[(h2 {} #["Playground"]) (p (cls "sub") #["Write Irij code in the browser. Alt+Enter: eval form at cursor. Ctrl+Enter: eval all."]) playground-body]
 
 ;; ═══════════════════════════════════════════════════════════════════
 ;; Playground Session API + examples
 ;; ═══════════════════════════════════════════════════════════════════
 
-use std.session :open
+use std.session :as session
+use std.session {Session}
 
 ;; POST /api/session — create a new persistent sandbox session
 fn create-session-id ::: Session
   =>
-  with default-session
+  with session.default-session
     session-create ()
 
 fn handle-session-create ::: Session
-  (_ -> json-response (json-encode ({id= (create-session-id ())})))
+  (_ -> serve.json-response (json-encode ({id= (create-session-id ())})))
 
 ;; POST /api/session/eval — eval code in a persistent session
 fn session-eval-body ::: Session Time
@@ -831,12 +836,12 @@ fn session-eval-body ::: Session Time
   t0 := time-now ()
   result := session-eval id code 10000
   elapsed := (time-now ()) - t0
-  json-response (json-encode ({value= (get "value" result) stdout= (get "stdout" result) error= (get "error" result) ok= (get "ok" result) elapsed= elapsed}))
+  serve.json-response (json-encode ({value= (get "value" result) stdout= (get "stdout" result) error= (get "error" result) ok= (get "ok" result) elapsed= elapsed}))
 
 fn handle-session-eval-helper ::: Session
   => request
-  with default-time
-    with default-session
+  with time.default-time
+    with session.default-session
       session-eval-body request
 
 fn handle-session-eval ::: Session
@@ -847,11 +852,11 @@ fn session-destroy-body ::: Session
   => request
   data := json-parse request.body
   session-destroy (get "id" data)
-  json-response (json-encode ({ok= true}))
+  serve.json-response (json-encode ({ok= true}))
 
 fn handle-session-destroy ::: Session
   => request
-  with default-session
+  with session.default-session
     session-destroy-body request
 
 ;; GET /api/session/stream?id=xxx — SSE stream of session output
@@ -866,18 +871,18 @@ fn session-stream-body ::: Serve Session
 
 fn handle-session-stream ::: Serve Session
   => request
-  with default-session
+  with session.default-session
     session-stream-body request
 
 fn parse-query
   => q
   pairs := split q "&"
   add-pair := (acc pair -> assoc acc (head (split pair "=")) (last (split pair "=")))
-  fold add-pair {} pairs
+  list.fold add-pair {} pairs
 
 ;; Keep old /eval endpoint for backwards compat
 fn handle-eval
-  (request -> json-response (json-encode (raw-nrepl-eval-sandboxed (get "code" (json-parse request.body)) 10000)))
+  (request -> serve.json-response (json-encode (raw-nrepl-eval-sandboxed (get "code" (json-parse request.body)) 10000)))
 
 pg-examples := #[
   {title= "Hello World" code= "println \"Hello, Irij!\""}
@@ -896,7 +901,7 @@ pg-examples := #[
 ]
 
 fn handle-examples
-  (_ -> json-response (json-encode pg-examples))
+  (_ -> serve.json-response (json-encode pg-examples))
 
 ;; ═══════════════════════════════════════════════════════════════════
 ;; Seed Registry — Pages
@@ -916,7 +921,7 @@ fn seed-card-el
 
 fn seeds-page
   => request
-  html ~ layout-head-extra "Seeds" #[(el "script" {type="module" src= "https://cdn.jsdelivr.net/gh/starfederation/datastar@1.0.0-RC.8/bundles/datastar.js"} #[])] "/seeds" #[
+  serve.html ~ layout-head-extra "Seeds" #[(el "script" {type="module" src= "https://cdn.jsdelivr.net/gh/starfederation/datastar@1.0.0-RC.8/bundles/datastar.js"} #[])] "/seeds" #[
     (el "script" {src= "https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.js"} #[])
     (h2 {} #["Seed Registry"])
     (p {class= "sub"} #["Browse and search Irij seeds (packages). Publish with: irij publish"])
@@ -926,18 +931,18 @@ fn seeds-page
 
 fn seed-detail-page
   => request
-  segments := path-segments request.path "/seeds"
+  segments := serve.path-segments request.path "/seeds"
   name := head segments
-  with default-db
+  with db.default-db
     pkg := db-query registry-db "SELECT p.name, u.username AS owner, p.license, p.website, p.repo, p.docs, p.created FROM packages p JOIN users u ON u.id = p.owner_id WHERE p.name = ?" #[name]
     if (empty? pkg)
-      html ~ layout "Not Found" "/seeds" #[(h2 {} #["Seed Not Found"]) (p {} #[("No seed named '" ++ name ++ "' exists.")])]
+      serve.html ~ layout "Not Found" "/seeds" #[(h2 {} #["Seed Not Found"]) (p {} #[("No seed named '" ++ name ++ "' exists.")])]
     else
       versions := db-query registry-db "SELECT version, description, readme, author, published FROM versions WHERE package_name = ? ORDER BY id DESC" #[name]
       latest := head versions
       version-items := versions |> @ render-version-item
       pkg-info := head pkg
-      html ~ layout name "/seeds" #[
+      serve.html ~ layout name "/seeds" #[
         (div {class= "seed-detail-header"} #[
           (h2 {} #[(span {} #[name]) (span {class= "seed-version"} #[latest.version])])
           (p {class= "sub"} #[latest.description])
@@ -1015,7 +1020,7 @@ fn user-by-token-hash ::: Db
 
 fn lookup-token-rows ::: Db
   => hashed
-  with default-db
+  with db.default-db
     db-query registry-db "SELECT u.id, u.username FROM users u JOIN api_tokens t ON t.user_id = u.id WHERE t.token_hash = ?" #[hashed]
 
 fn unauthorized-publish :: Map
@@ -1063,10 +1068,10 @@ fn publish-validate ::: Db FileIO Serve
             repo= (str-or-empty (get "repo" meta))
             docs= (str-or-empty (get "docs" meta))}
   if (name == "" || version == "" || description == "")
-    json-response (json-encode ({error= "Missing required fields: name, version, description"}))
+    serve.json-response (json-encode ({error= "Missing required fields: name, version, description"}))
   else
     if ((bad-link? links.website) || (bad-link? links.repo) || (bad-link? links.docs))
-      json-response (json-encode ({error= "website/repo/docs must be http(s):// URLs"}))
+      serve.json-response (json-encode ({error= "website/repo/docs must be http(s):// URLs"}))
     else
       publish-check-owner request caller name version description license links
 
@@ -1082,7 +1087,7 @@ fn publish-check-owner ::: Db FileIO Serve
 
 fn lookup-pkg-owner ::: Db
   => name
-  with default-db
+  with db.default-db
     db-query registry-db "SELECT owner_id FROM packages WHERE name = ?" #[name]
 
 fn owner-not-mine? :: _ _ Bool
@@ -1095,29 +1100,29 @@ fn owner-not-mine? :: _ _ Bool
 fn do-publish ::: FileIO Serve Db
   => request name version author description license caller-id links
   tarball-dir := seeds-storage-dir ++ "/" ++ name
-  with default-fs
+  with fs.default-fs
     fs-mkdir tarball-dir
   tarball-path := tarball-dir ++ "/" ++ version ++ ".tar.gz"
   multipart-save request "tarball" tarball-path
   version-exists := lookup-version name version
   if (empty? version-exists == false)
-    json-response (json-encode ({error= (name ++ " " ++ version ++ " already published")}))
+    serve.json-response (json-encode ({error= (name ++ " " ++ version ++ " already published")}))
   else
     publish-write-rows name version author description license caller-id links
 
 fn lookup-version ::: Db
   => name version
-  with default-db
+  with db.default-db
     db-query registry-db "SELECT id FROM versions WHERE package_name = ? AND version = ?" #[name version]
 
 ;; Links are latest-publish-wins, same as license: irij.toml is the
 ;; source of truth, so removing a link there removes it here.
 fn publish-write-rows ::: Db FileIO Serve
   => name version author description license caller-id links
-  with default-db
+  with db.default-db
     db-exec registry-db "INSERT INTO packages (name, owner_id, license, website, repo, docs, updated) VALUES (?, ?, ?, ?, ?, ?, datetime('now')) ON CONFLICT(name) DO UPDATE SET license = excluded.license, website = excluded.website, repo = excluded.repo, docs = excluded.docs, updated = datetime('now')" #[name caller-id license links.website links.repo links.docs]
     db-exec registry-db "INSERT INTO versions (package_name, version, description, readme, author) VALUES (?, ?, ?, ?, ?)" #[name version description "" author]
-    json-response (json-encode ({ok= true name= name version= version}))
+    serve.json-response (json-encode ({ok= true name= name version= version}))
 
 ;; GET /api/seeds — list/search seeds
 fn compose-query-data
@@ -1130,7 +1135,7 @@ fn compose-query-data
 
 fn perform-db-query
   => q
-  with default-db
+  with db.default-db
     #[sql params] := compose-query-data q
     db-query registry-db sql params
 
@@ -1147,7 +1152,7 @@ fn handle-seed-list ::: Serve
   => request
   params := split request.query "&"
     |> @ (part -> split part "=")
-    |> fold (acc pair -> assoc acc (head pair) (last pair)) {}
+    |> list.fold (acc pair -> assoc acc (head pair) (last pair)) {}
   q := get "q" params
   seeds := perform-db-query q
   cards := seeds |> @ seed-card-el
@@ -1155,14 +1160,14 @@ fn handle-seed-list ::: Serve
     #[(div {class= "empty-state"} ~ empty-message q)]
     else
     cards)
-  ds-patch (ds-sse request) "#seed-list" ~ render (div {id= "seed-list"} dom)
+  datastar.ds-patch (datastar.ds-sse request) "#seed-list" ~ render (div {id= "seed-list"} dom)
 
 ;; GET /api/seeds/* — route by segment count:
 ;;   /api/seeds/:name              → detail
 ;;   /api/seeds/:name/:version/download → download tarball
 fn handle-seed-route ::: FileIO Serve
   => request
-  segments := path-segments request.path "/api/seeds"
+  segments := serve.path-segments request.path "/api/seeds"
   count := length segments
   if (count == 1)
     handle-seed-detail (head segments)
@@ -1174,18 +1179,18 @@ fn handle-seed-route ::: FileIO Serve
 
 fn handle-seed-detail
   => name
-  with default-db
+  with db.default-db
     pkg := db-query registry-db "SELECT p.name, u.username AS owner, p.license, p.website, p.repo, p.docs, p.created FROM packages p JOIN users u ON u.id = p.owner_id WHERE p.name = ?" #[name]
     if (empty? pkg)
       {status= 404 body= (json-encode ({error= "Seed not found"})) headers= (assoc {} "content-type" "application/json")}
     else
       versions := db-query registry-db "SELECT id, version, description, readme, author, published FROM versions WHERE package_name = ? ORDER BY id DESC" #[name]
-      json-response (json-encode ({package= (head pkg) versions= versions}))
+      serve.json-response (json-encode ({package= (head pkg) versions= versions}))
 
 fn handle-seed-download ::: FileIO
   => name version
   tarball-path := seeds-storage-dir ++ "/" ++ name ++ "/" ++ version ++ ".tar.gz"
-  exists := with default-fs do (fs-exists? tarball-path)
+  exists := with fs.default-fs do (fs-exists? tarball-path)
   if exists
     {status= 200 file= tarball-path headers= (assoc (assoc {} "content-type" "application/gzip") "content-disposition" ("attachment; filename=" ++ name ++ "-" ++ version ++ ".tar.gz"))}
   else
@@ -1210,7 +1215,7 @@ fn doc-card
 
 fn docs-page
   (req ->
-    html ~ layout "Docs" "/docs" #[
+    serve.html ~ layout "Docs" "/docs" #[
       (h2 {} #["How Irij Works"])
       (p {} #["Design decisions, code structure, and the trade-offs behind each subsystem. Rendered inline from the Irij repo's docs/internals/ directory."])
       (div {class= "card" style= "margin-bottom:1rem"} #[
@@ -1247,7 +1252,7 @@ doc-page-head-extras := #[
 
 fn doc-detail-page
   (req ->
-    html ~ layout-head-extra "Docs" doc-page-head-extras "/docs" #[
+    serve.html ~ layout-head-extra "Docs" doc-page-head-extras "/docs" #[
       (a {href= "/docs" class= "doc-back"} #["← All docs"])
       (h2 {id= "doc-title"} #["Loading…"])
       (div {id= "doc-content" class= "doc-md"} #[(p {} #["Loading…"])])])
@@ -1277,7 +1282,7 @@ fn parse-cookies :: _ Map
   if (header == () || header == "")
     {}
   else
-    fold add-cookie-pair {} (split header ";")
+    list.fold add-cookie-pair {} (split header ";")
 
 fn add-form-pair :: Map Str Map
   => acc pair
@@ -1292,7 +1297,7 @@ fn parse-form-body :: _ Map
   if (body == () || body == "")
     {}
   else
-    fold add-form-pair {} (split body "&")
+    list.fold add-form-pair {} (split body "&")
 
 fn find-user-by-session ::: Db
   => conn token
@@ -1303,7 +1308,7 @@ fn find-user-by-session ::: Db
 
 fn lookup-user-by-session-hash ::: Db
   => conn hashed
-  with default-db
+  with db.default-db
     rows := db-query conn "SELECT u.id, u.username, u.email FROM users u JOIN web_sessions s ON s.user_id = u.id WHERE s.token_hash = ? AND s.expires > datetime('now')" #[hashed]
     rows-first-or-empty rows
 
@@ -1319,9 +1324,9 @@ fn current-user ::: Db
   cookies := parse-cookies (get "cookie" request.headers)
   find-user-by-session registry-db (get "irij_session" cookies)
 
-fn make-web-session ::: Db Random
+fn make-web-session ::: Db random.Random
   => user-id
-  token := new-session-token ()
+  token := auth.new-session-token ()
   hashed := sha256-hex token
   db-exec registry-db "INSERT INTO web_sessions (user_id, token_hash, expires) VALUES (?, ?, datetime('now', '+30 days'))" #[user-id hashed]
   token
@@ -1330,7 +1335,7 @@ fn make-web-session ::: Db Random
 
 fn signup-page-with-err
   => err
-  html ~ layout "Sign Up" "/signup" #[
+  serve.html ~ layout "Sign Up" "/signup" #[
     (h2 {} #["Create your Irij account"])
     (auth-banner err)
     (el "form" {action= "/signup" method= "POST" class= "auth-form"} #[
@@ -1360,12 +1365,12 @@ fn pick-or-empty :: _ Str
   else
     raw
 
-fn signup-write ::: Db Random FileIO Serve
+fn signup-write ::: Db random.Random FileIO Serve
   => username email password
-  with default-db
-    with default-random
-      salt := new-salt ()
-      pw-hash := hash-password salt password
+  with db.default-db
+    with random.default-random
+      salt := auth.new-salt ()
+      pw-hash := auth.hash-password salt password
       db-exec registry-db "INSERT INTO users (username, email, pw_hash) VALUES (?, ?, ?)" #[username email pw-hash]
       new-user := head (db-query registry-db "SELECT id FROM users WHERE username = ?" #[username])
       token := make-web-session new-user.id
@@ -1376,18 +1381,18 @@ fn signup-write ::: Db Random FileIO Serve
 
 fn user-exists? ::: Db
   => username
-  with default-db
+  with db.default-db
     rows := db-query registry-db "SELECT id FROM users WHERE username = ?" #[username]
     empty? rows == false
 
-fn signup-check-uniq ::: Db Random FileIO Serve
+fn signup-check-uniq ::: Db random.Random FileIO Serve
   => username email password
   if (user-exists? username)
     signup-page-with-err "That username is taken."
   else
     signup-write username email password
 
-fn signup-check-pw ::: Db Random FileIO Serve
+fn signup-check-pw ::: Db random.Random FileIO Serve
   => username email password
   if ((length password) < 8)
     signup-page-with-err "Password must be at least 8 characters."
@@ -1398,7 +1403,7 @@ fn signup-check-pw ::: Db Random FileIO Serve
 
 fn login-page-with-err
   => err
-  html ~ layout "Log In" "/login" #[
+  serve.html ~ layout "Log In" "/login" #[
     (h2 {} #["Log in"])
     (auth-banner err)
     (el "form" {action= "/login" method= "POST" class= "auth-form"} #[
@@ -1413,20 +1418,20 @@ fn login-page
 
 fn lookup-user-row ::: Db
   => username
-  with default-db
+  with db.default-db
     db-query registry-db "SELECT id, pw_hash FROM users WHERE username = ?" #[username]
 
-fn login-issue-session ::: Db Random FileIO Serve
+fn login-issue-session ::: Db random.Random FileIO Serve
   => user-id
-  with default-db
-    with default-random
+  with db.default-db
+    with random.default-random
       token := make-web-session user-id
       {status= 302
        body= ""
        headers= {location= "/"
                  set-cookie= ("irij_session=" ++ token ++ "; HttpOnly; SameSite=Lax; Path=/; Max-Age=2592000")}}
 
-fn login-verify ::: Db Random FileIO Serve
+fn login-verify ::: Db random.Random FileIO Serve
   => row password
   stored := get "pw_hash" row
   if (stored == ())
@@ -1434,21 +1439,21 @@ fn login-verify ::: Db Random FileIO Serve
   else
     login-verify-hash stored (get "id" row) password
 
-fn login-verify-hash ::: Db Random FileIO Serve
+fn login-verify-hash ::: Db random.Random FileIO Serve
   => stored user-id password
-  if (verify-password stored password)
+  if (auth.verify-password stored password)
     login-issue-session user-id
   else
     login-page-with-err "Invalid credentials."
 
-fn login-with-rows ::: Db Random FileIO Serve
+fn login-with-rows ::: Db random.Random FileIO Serve
   => rows password
   if (empty? rows)
     login-page-with-err "Invalid credentials."
   else
     login-verify (head rows) password
 
-fn handle-login ::: Db Random FileIO Serve
+fn handle-login ::: Db random.Random FileIO Serve
   => request
   form := parse-form-body request.body
   username := pick-or-empty (get "username" form)
@@ -1463,7 +1468,7 @@ fn delete-session-by-token ::: Db
   if (token == () || token == "")
     ()
   else
-    with default-db
+    with db.default-db
       hashed := sha256-hex token
       db-exec registry-db "DELETE FROM web_sessions WHERE token_hash = ?" #[hashed]
 
@@ -1484,12 +1489,12 @@ fn redirect-login :: Map
 
 fn user-packages ::: Db
   => user-id
-  with default-db
+  with db.default-db
     db-query registry-db "SELECT name, license FROM packages WHERE owner_id = ? ORDER BY updated DESC" #[user-id]
 
 fn user-tokens ::: Db
   => user-id
-  with default-db
+  with db.default-db
     db-query registry-db "SELECT id, label, created, last_used FROM api_tokens WHERE user_id = ? ORDER BY id DESC" #[user-id]
 
 fn pkg-row-el
@@ -1549,7 +1554,7 @@ fn dashboard-for-user ::: Db FileIO Serve
   => user new-token
   packages := user-packages (get "id" user)
   tokens := user-tokens (get "id" user)
-  html ~ layout "Dashboard" "/dashboard" (dashboard-body user packages tokens new-token)
+  serve.html ~ layout "Dashboard" "/dashboard" (dashboard-body user packages tokens new-token)
 
 fn dashboard-page ::: Db FileIO Serve
   => request
@@ -1561,16 +1566,16 @@ fn dashboard-page ::: Db FileIO Serve
 
 ;; ── Token CRUD ───────────────────────────────────────────────────
 
-fn token-create-write ::: Db Random FileIO Serve
+fn token-create-write ::: Db random.Random FileIO Serve
   => user-id label
-  with default-db
-    with default-random
-      token := new-session-token ()
+  with db.default-db
+    with random.default-random
+      token := auth.new-session-token ()
       hashed := sha256-hex token
       db-exec registry-db "INSERT INTO api_tokens (user_id, token_hash, label) VALUES (?, ?, ?)" #[user-id hashed label]
       {status= 302 body= "" headers= {location= ("/dashboard?token=" ++ token)}}
 
-fn handle-token-create ::: Db Random FileIO Serve
+fn handle-token-create ::: Db random.Random FileIO Serve
   => request
   user := current-user request
   if (empty? user)
@@ -1578,7 +1583,7 @@ fn handle-token-create ::: Db Random FileIO Serve
   else
     token-create-resolve user (parse-form-body request.body)
 
-fn token-create-resolve ::: Db Random FileIO Serve
+fn token-create-resolve ::: Db random.Random FileIO Serve
   => user form
   label-raw := get "label" form
   label := pick-or-empty label-raw
@@ -1605,16 +1610,16 @@ fn token-delete-do ::: Db FileIO Serve
   if (id-raw == () || id-raw == "")
     {status= 302 body= "" headers= {location= "/dashboard"}}
   else
-    token-delete-write (get "id" user) (to-int id-raw)
+    token-delete-write (get "id" user) (convert.to-int id-raw)
 
 fn token-delete-write ::: Db FileIO Serve
   => user-id token-id
-  with default-db
+  with db.default-db
     db-exec registry-db "DELETE FROM api_tokens WHERE id = ? AND user_id = ?" #[token-id user-id]
     {status= 302 body= "" headers= {location= "/dashboard"}}
 
 
-fn handle-signup ::: Db Random FileIO Serve
+fn handle-signup ::: Db random.Random FileIO Serve
   => request
   form := parse-form-body request.body
   username := pick-or-empty (get "username" form)
@@ -1628,40 +1633,40 @@ fn handle-signup ::: Db Random FileIO Serve
 ;; Everything that evaluates a visitor's code. Caddy routes these paths to
 ;; the playground process when it runs separately (IRIJ_PLAYGROUND=external).
 playground-routes := #[
-  (route "POST" "/eval" handle-eval)
-  (route "POST" "/api/session" handle-session-create)
-  (route "POST" "/api/session/eval" handle-session-eval)
-  (route "POST" "/api/session/destroy" handle-session-destroy)
-  (route "GET" "/api/session/stream" handle-session-stream)
+  (serve.route "POST" "/eval" handle-eval)
+  (serve.route "POST" "/api/session" handle-session-create)
+  (serve.route "POST" "/api/session/eval" handle-session-eval)
+  (serve.route "POST" "/api/session/destroy" handle-session-destroy)
+  (serve.route "GET" "/api/session/stream" handle-session-stream)
 ]
 
 site-routes := #[
-  (route "GET" "/" home-page)
-  (route "GET" "/playground" playground-page)
-  (route "GET" "/docs" docs-page)
-  (route-prefix "GET" "/docs/" doc-detail-page)
-  (route "GET" "/api/examples" handle-examples)
-  (route "GET" "/seeds" seeds-page)
-  (route-prefix "GET" "/seeds/" seed-detail-page)
-  (route "POST" "/api/seeds/publish" handle-seed-publish)
-  (route "GET" "/api/seeds" handle-seed-list)
-  (route-prefix "GET" "/api/seeds/" handle-seed-route)
-  (route "GET" "/signup" signup-page)
-  (route "POST" "/signup" handle-signup)
-  (route "GET" "/login" login-page)
-  (route "POST" "/login" handle-login)
-  (route "POST" "/logout" handle-logout)
-  (route "GET" "/dashboard" dashboard-page)
-  (route "POST" "/api/tokens" handle-token-create)
-  (route "POST" "/api/tokens/delete" handle-token-delete)
+  (serve.route "GET" "/" home-page)
+  (serve.route "GET" "/playground" playground-page)
+  (serve.route "GET" "/docs" docs-page)
+  (serve.route-prefix "GET" "/docs/" doc-detail-page)
+  (serve.route "GET" "/api/examples" handle-examples)
+  (serve.route "GET" "/seeds" seeds-page)
+  (serve.route-prefix "GET" "/seeds/" seed-detail-page)
+  (serve.route "POST" "/api/seeds/publish" handle-seed-publish)
+  (serve.route "GET" "/api/seeds" handle-seed-list)
+  (serve.route-prefix "GET" "/api/seeds/" handle-seed-route)
+  (serve.route "GET" "/signup" signup-page)
+  (serve.route "POST" "/signup" handle-signup)
+  (serve.route "GET" "/login" login-page)
+  (serve.route "POST" "/login" handle-login)
+  (serve.route "POST" "/logout" handle-logout)
+  (serve.route "GET" "/dashboard" dashboard-page)
+  (serve.route "POST" "/api/tokens" handle-token-create)
+  (serve.route "POST" "/api/tokens/delete" handle-token-delete)
 ]
 
 routes := if playground-external site-routes else (site-routes ++ playground-routes)
 
 if (run-mode == "playground")
   println ("irij.online playground on :" ++ to-str playground-port)
-  with default-serve
-    serve playground-port (router playground-routes)
+  with serve.default-serve
+    serve playground-port (serve.router playground-routes)
 else
-  with default-serve
-    serve 8080 (router routes)
+  with serve.default-serve
+    serve 8080 (serve.router routes)
