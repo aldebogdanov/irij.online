@@ -1,5 +1,5 @@
 // irij-mode.js — CodeMirror 5 syntax highlighting for Irij
-// Ported from editors/emacs/irij-mode.el
+// Ported from editors/emacs/irij-mode.el in the Irij repo
 
 (function(mod) {
   if (typeof exports === 'object' && typeof module === 'object')
@@ -12,38 +12,43 @@
   'use strict';
 
   CodeMirror.defineMode('irij', function() {
+    // Keep in sync with the Irij repo: keywords = the lowercase literal
+    // tokens of src/main/antlr/IrijLexer.g4 (`model` is soft, see below);
+    // builtins = what a file reaches without an import
+    // (IntrinsicsEmitter.NAMES + pi, e, resume). The repo's
+    // EditorGrammarSyncTest pins the same lists for Emacs and TextMate.
     var keywords = new Set([
       'fn', 'do', 'if', 'else', 'match', 'spec', 'newtype',
       'mod', 'use', 'pub', 'with', 'scope', 'effect', 'party',
-      'cap', 'handler', 'impl', 'proto', 'pre', 'post', 'law',
-      'contract', 'select', 'enclave', 'forall', 'par-each',
+      'cap', 'handler', 'impl', 'proto', 'pre', 'post',
+      'contract', 'select', 'enclave', 'par-each',
       'on-failure', 'in', 'out', 'for', 'proof'
     ]);
 
     var builtins = new Set([
-      'print', 'println', 'to-str', 'dbg',
-      'quo', 'rem', 'abs', 'min', 'max',
-      'head', 'tail', 'length', 'reverse', 'sort',
-      'concat', 'take', 'drop', 'to-vec',
-      'contains?', 'keys', 'vals', 'get',
-      'nth', 'last', 'fold', 'map', 'filter',
-      'identity', 'const', 'not', 'empty?',
-      'spawn', 'sleep', 'try', 'apply', 'await',
-      'timeout', 'par', 'race', 'verify-laws',
-      'error', 'type-of',
-      'assoc', 'dissoc', 'merge',
+      'pi', 'e',
+      'print', 'println', 'to-str', 'dbg', 'type-of', 'error', 'read-line',
+      'abs', 'min', 'max', 'quo', 'rem', 'sqrt', 'floor', 'ceil', 'round',
+      'sin', 'cos', 'tan', 'log', 'exp', 'pow',
+      'parse-int', 'parse-float', 'random-int', 'random-float',
+      'head', 'tail', 'length', 'reverse', 'sort', 'concat', 'conj',
+      'take', 'drop', 'to-vec', 'to-set', 'to-tuple', 'nth', 'last', 'fold',
+      'contains?', 'empty?', 'keys', 'vals', 'get', 'assoc', 'dissoc', 'merge',
+      'identity', 'const', 'flip', 'not',
       'split', 'join', 'trim', 'upper-case', 'lower-case',
-      'starts-with?', 'ends-with?', 'replace', 'substring',
-      'char-at', 'index-of',
-      'sqrt', 'floor', 'ceil', 'round', 'sin', 'cos', 'tan',
-      'log', 'exp', 'pow',
-      'random-int', 'random-float',
-      'parse-int', 'parse-float', 'char-code', 'from-char-code',
-      'read-file', 'write-file', 'file-exists?',
+      'starts-with?', 'ends-with?', 'replace', 'substring', 'char-at', 'index-of',
+      'char-code', 'from-char-code',
       'json-parse', 'json-encode', 'json-encode-pretty',
-      'time-ms', 'url-encode', 'url-decode',
-      'resume', 'true', 'false'
+      'url-encode', 'url-decode', 'toml-parse',
+      'sha256-hex', 'hmac-sha256-hex', 'pbkdf2-sha256-hex',
+      'random-token', 'constant-time-eq?',
+      'spawn', 'sleep', 'await', 'timeout', 'par', 'race', 'try',
+      'env', 'get-env', 'now-ms', 'program-args',
+      'validate', 'validate!',
+      'resume'
     ]);
+
+    var constants = new Set(['true', 'false']);
 
     function tokenBase(stream, state) {
       // Whitespace
@@ -67,7 +72,7 @@
       // Keywords (atoms like :foo)
       if (ch === ':' && !stream.match('::', false) && !stream.match(':=', false) && !stream.match(':!', false)) {
         stream.next();
-        if (stream.match(/^[a-z][a-z0-9-]*/)) {
+        if (stream.match(/^[a-z][a-z0-9_-]*/)) {
           return 'atom';
         }
         // :: or ::: operator
@@ -78,7 +83,7 @@
       // Numbers
       if (ch >= '0' && ch <= '9') {
         // Hex
-        if (stream.match(/^0x[0-9a-fA-F][0-9a-fA-F_]*/)) return 'number';
+        if (stream.match(/^0[xX][0-9a-fA-F][0-9a-fA-F_]*/)) return 'number';
         // Rational
         if (stream.match(/^[0-9]+\/[0-9]+/)) return 'number';
         // Float or int
@@ -91,6 +96,11 @@
         stream.next();
         stream.match(/^[0-9][0-9_]*(?:\.[0-9][0-9_]*)?(?:[eE][+-]?[0-9]+)?/);
         return 'number';
+      }
+
+      // Java interop: Class/member, java.pkg.Class/member
+      if (stream.match(/^[A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z_][A-Za-z0-9_]*)*\/[A-Za-z_][A-Za-z0-9_]*/)) {
+        return 'builtin';
       }
 
       // Uppercase identifiers (types, constructors)
@@ -111,6 +121,11 @@
         stream.match(/^[a-z_][a-z0-9_?!-]*/);
         var word = stream.current();
         if (keywords.has(word)) return 'keyword';
+        // `model` is a keyword only where a declaration starts
+        if (word === 'model' &&
+            /^\s*(?:pub\s+)?model$/.test(stream.string.slice(0, stream.pos)) &&
+            /^\s+[a-z]/.test(stream.string.slice(stream.pos))) return 'keyword';
+        if (constants.has(word)) return 'atom';
         if (builtins.has(word)) return 'builtin';
         return 'variable';
       }
@@ -122,13 +137,12 @@
       if (stream.match('->') || stream.match('=>')) return 'operator';
       if (stream.match('|>') || stream.match('<|')) return 'operator';
       if (stream.match('>>') || stream.match('<<')) return 'operator';
-      if (stream.match('~>') || stream.match('<~')) return 'operator';
-      if (stream.match('~*>') || stream.match('~/')) return 'operator';
+      if (stream.match('~*>') || stream.match('~>') || stream.match('<~') || stream.match('~/')) return 'operator';
       if (stream.match('==') || stream.match('/=')) return 'operator';
       if (stream.match('<=') || stream.match('>=')) return 'operator';
       if (stream.match('&&') || stream.match('||')) return 'operator';
       if (stream.match('**') || stream.match('++')) return 'operator';
-      if (stream.match('..') || stream.match('..<')) return 'operator';
+      if (stream.match('...') || stream.match('..<') || stream.match('..')) return 'operator';
 
       // Seq operators: /+ /? /! etc
       if (ch === '/') {
