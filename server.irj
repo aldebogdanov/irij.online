@@ -544,6 +544,8 @@ fn home-install
         (code-lines #[
           "irij file.irj                 <span class=\"c\">## run a source file</span>"
           "irij test                     <span class=\"c\">## run tests/test-*.irj</span>"
+          "irij test -v                  <span class=\"c\">## … listing every test</span>"
+          "irij quint doctor             <span class=\"c\">## is quint here, and the tested version?</span>"
           "irij install                  <span class=\"c\">## fetch seeds from irij.toml</span>"
           "irij build                    <span class=\"c\">## package a self-contained JAR</span>"
           "irij publish                  <span class=\"c\">## publish a seed to the registry</span>"
@@ -552,7 +554,7 @@ fn home-install
           "irij help                     <span class=\"c\">## full command list</span>"])
         (h3 {} #["Editors"])
         (p {} #[(raw "<strong>VS Code</strong>: <code>editors/vscode/</code> — highlighting, the language server (diagnostics, hover, go to definition, completion, expand selection) and a terminal REPL (<kbd>Cmd/Ctrl+Enter</kbd> sends the form at the cursor). Build it there with <code>npm install &amp;&amp; npm run package</code>, then <code>code --install-extension irij-*.vsix</code>.")])
-        (p {} #[(raw "<strong>Emacs</strong>: <code>editors/emacs/</code> — <code>irij-mode.el</code> (highlighting, offside indentation, eglot / lsp-mode wiring), <code>irij-nrepl.el</code> (inline eval) and <code>irij-selection.el</code> (expand/shrink region).")])
+        (p {} #[(raw "<strong>Emacs</strong>: <code>editors/emacs/</code> — <code>irij-mode.el</code> (highlighting, offside indentation, eglot / lsp-mode wiring — start one with <code>(add-hook 'irij-mode-hook #'lsp-deferred)</code> or <code>#'eglot-ensure</code>), <code>irij-nrepl.el</code> (inline eval) and <code>irij-selection.el</code> (expand/shrink region along the syntax tree, also on puni's and expand-region's keys).")])
         (p {} #[(raw "Anything else that reads TextMate grammars (Sublime Text, Zed, Shiki): <code>editors/textmate/irij.tmLanguage.json</code>.")])])])])
 
 ;; ── Feature cards ────────────────────────────────────────────────
@@ -764,6 +766,8 @@ fn home-roadmap
                          phase-row "done" "v0.9.279" "Top-level code sees a top-level binding's current value, not its first one" ++
                          phase-row "done" "v0.9.299" "Specs, variants and effects through an import alias (`:: m.Mode`, `m.Calm`, `::: m.Tick`), and std, tests and examples import qualified; effect ops in `match` arms and inline `if`s; each `if` branch is its own scope; definitions may share a builtin's name; `newtype` compiles" ++
                          phase-row "done" "v0.9.309" "Editor tooling: a VS Code extension (highlighting, LSP, terminal REPL); the Emacs mode follows the lexer (offside indentation, eglot / lsp-mode); expand/shrink selection over the LSP; `irij repl` reads multi-line input" ++
+                         phase-row "done" "v0.9.314" "The language server no longer reports a qualified effect (`::: proc.Proc`) as an unbound row variable; Emacs expand/shrink asks the server under lsp-mode too" ++
+                         phase-row "done" "v0.9.330" "`irij test` and `irij quint doctor` in colour, and `irij test -v` lists every test; Quint 0.33.0 is the tested version, its traces identical to 0.32.0's; in Emacs, puni's and expand-region's keys expand along the syntax tree" ++
                          phase-row "planned" "Future" "Linear types (capability + channel safety); channels (send/recv/select); choreographic programming; refinement types; content-addressed code; multi-resume effects (search/nondet/probabilistic); GraalVM native image"))
 
 ;; ── Full home page ───────────────────────────────────────────────
