@@ -550,7 +550,10 @@ fn home-install
           "irij lsp                      <span class=\"c\">## LSP server for editors</span>"
           "irij --nrepl-server           <span class=\"c\">## nREPL on port 7888</span>"
           "irij help                     <span class=\"c\">## full command list</span>"])
-        (p {} #[(raw "Emacs users: <code>editors/emacs/irij-mode.el</code> and <code>irij-nrepl.el</code> ship in the repo.")])])])])
+        (h3 {} #["Editors"])
+        (p {} #[(raw "<strong>VS Code</strong>: <code>editors/vscode/</code> — highlighting, the language server (diagnostics, hover, go to definition, completion, expand selection) and a terminal REPL (<kbd>Cmd/Ctrl+Enter</kbd> sends the form at the cursor). Build it there with <code>npm install &amp;&amp; npm run package</code>, then <code>code --install-extension irij-*.vsix</code>.")])
+        (p {} #[(raw "<strong>Emacs</strong>: <code>editors/emacs/</code> — <code>irij-mode.el</code> (highlighting, offside indentation, eglot / lsp-mode wiring), <code>irij-nrepl.el</code> (inline eval) and <code>irij-selection.el</code> (expand/shrink region).")])
+        (p {} #[(raw "Anything else that reads TextMate grammars (Sublime Text, Zed, Shiki): <code>editors/textmate/irij.tmLanguage.json</code>.")])])])])
 
 ;; ── Feature cards ────────────────────────────────────────────────
 
@@ -760,6 +763,7 @@ fn home-roadmap
                          phase-row "done" "v0.9.277" "Imports are enforced: a file reaches only what it declares, imports or has as a builtin, and each error names the `use` line to add; a local shadows an alias; `pub use` re-exports" ++
                          phase-row "done" "v0.9.279" "Top-level code sees a top-level binding's current value, not its first one" ++
                          phase-row "done" "v0.9.299" "Specs, variants and effects through an import alias (`:: m.Mode`, `m.Calm`, `::: m.Tick`), and std, tests and examples import qualified; effect ops in `match` arms and inline `if`s; each `if` branch is its own scope; definitions may share a builtin's name; `newtype` compiles" ++
+                         phase-row "done" "v0.9.309" "Editor tooling: a VS Code extension (highlighting, LSP, terminal REPL); the Emacs mode follows the lexer (offside indentation, eglot / lsp-mode); expand/shrink selection over the LSP; `irij repl` reads multi-line input" ++
                          phase-row "planned" "Future" "Linear types (capability + channel safety); channels (send/recv/select); choreographic programming; refinement types; content-addressed code; multi-resume effects (search/nondet/probabilistic); GraalVM native image"))
 
 ;; ── Full home page ───────────────────────────────────────────────
@@ -1238,8 +1242,8 @@ fn docs-page
         (doc-card "capabilities" "Capabilities" "cap decls — bridging effect ops to host (Java) providers.")
         (doc-card "stdlib" "Stdlib" "What lives in Java vs Irij. One implementation per builtin.")
         (doc-card "quint" "Quint" "Model-based testing against a formal spec. ITF decoding, the two model shapes, and what Quint actually emits.")
-        (doc-card "nrepl" "nREPL" "Protocol, sessions, eval vs eval-bytecode.")
-        (doc-card "lsp" "LSP" "irij lsp — editor integration, capabilities.")
+        (doc-card "nrepl" "nREPL" "Protocol, sessions, eval vs eval-bytecode; how the terminal REPL reads multi-line input.")
+        (doc-card "lsp" "LSP" "irij lsp — capabilities (incl. expand selection), Emacs and VS Code integration.")
         (doc-card "glossary" "Glossary" "Terms used throughout these docs.")])])
 
 ;; Single doc page: shell + marked.js (CDN) + /docs.js (resource)
