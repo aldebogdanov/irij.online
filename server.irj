@@ -545,17 +545,18 @@ fn home-install
           "irij file.irj                 <span class=\"c\">## run a source file</span>"
           "irij test                     <span class=\"c\">## run tests/test-*.irj</span>"
           "irij test -v                  <span class=\"c\">## … listing every test</span>"
-          "irij quint doctor             <span class=\"c\">## is quint here, and the tested version?</span>"
+          "irij quint doctor             <span class=\"c\">## check the quint toolchain</span>"
           "irij install                  <span class=\"c\">## fetch seeds from irij.toml</span>"
           "irij build                    <span class=\"c\">## package a self-contained JAR</span>"
           "irij publish                  <span class=\"c\">## publish a seed to the registry</span>"
           "irij lsp                      <span class=\"c\">## LSP server for editors</span>"
           "irij --nrepl-server           <span class=\"c\">## nREPL on port 7888</span>"
-          "irij help                     <span class=\"c\">## full command list</span>"])
-        (h3 {} #["Editors"])
-        (p {} #[(raw "<strong>VS Code</strong>: <code>editors/vscode/</code> — highlighting, the language server (diagnostics, hover, go to definition, completion, expand selection) and a terminal REPL (<kbd>Cmd/Ctrl+Enter</kbd> sends the form at the cursor). Build it there with <code>npm install &amp;&amp; npm run package</code>, then <code>code --install-extension irij-*.vsix</code>.")])
-        (p {} #[(raw "<strong>Emacs</strong>: <code>editors/emacs/</code> — <code>irij-mode.el</code> (highlighting, offside indentation, eglot / lsp-mode wiring — start one with <code>(add-hook 'irij-mode-hook #'lsp-deferred)</code> or <code>#'eglot-ensure</code>), <code>irij-nrepl.el</code> (inline eval) and <code>irij-selection.el</code> (expand/shrink region along the syntax tree, also on puni's and expand-region's keys).")])
-        (p {} #[(raw "Anything else that reads TextMate grammars (Sublime Text, Zed, Shiki): <code>editors/textmate/irij.tmLanguage.json</code>.")])])])])
+          "irij help                     <span class=\"c\">## full command list</span>"])])])
+    (h3 {} #["Editors"])
+    (div (cls "feature-grid") #[
+      (div (cls "card") #[(h3 {} #["VS Code"]) (p {} #[(raw "<code>editors/vscode/</code> — highlighting, the language server (diagnostics, hover, go to definition, completion, expand selection) and a terminal REPL (<kbd>Cmd/Ctrl+Enter</kbd> sends the form at the cursor). Build it there with <code>npm install &amp;&amp; npm run package</code>, then <code>code --install-extension irij-*.vsix</code>.")])])
+      (div (cls "card") #[(h3 {} #["Emacs"]) (p {} #[(raw "<code>editors/emacs/</code> — <code>irij-mode.el</code> (highlighting, offside indentation, eglot / lsp-mode wiring — start one with <code>(add-hook 'irij-mode-hook #'lsp-deferred)</code> or <code>#'eglot-ensure</code>), <code>irij-nrepl.el</code> (inline eval) and <code>irij-selection.el</code> (expand/shrink region along the syntax tree, also on puni's and expand-region's keys).")])])
+      (div (cls "card") #[(h3 {} #["TextMate grammar"]) (p {} #[(raw "Anything else that reads TextMate grammars (Sublime Text, Zed, Shiki): <code>editors/textmate/irij.tmLanguage.json</code>.")])])])])
 
 ;; ── Feature cards ────────────────────────────────────────────────
 
