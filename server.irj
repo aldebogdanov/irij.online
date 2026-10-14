@@ -768,6 +768,7 @@ fn home-roadmap
                          phase-row "done" "v0.9.309" "Editor tooling: a VS Code extension (highlighting, LSP, terminal REPL); the Emacs mode follows the lexer (offside indentation, eglot / lsp-mode); expand/shrink selection over the LSP; `irij repl` reads multi-line input" ++
                          phase-row "done" "v0.9.314" "The language server no longer reports a qualified effect (`::: proc.Proc`) as an unbound row variable; Emacs expand/shrink asks the server under lsp-mode too" ++
                          phase-row "done" "v0.9.330" "`irij test` and `irij quint doctor` in colour, and `irij test -v` lists every test; Quint 0.33.0 is the tested version, its traces identical to 0.32.0's; in Emacs, puni's and expand-region's keys expand along the syntax tree" ++
+                         phase-row "done" "v0.9.332" "`std.resource`: a `Resource` effect (`resource-read`, `resource-exists?`) gives a program read-only access to its own `resources/` — the jar's bundle after `irij build`, else the directory beside it — without granting the disk" ++
                          phase-row "planned" "Future" "Linear types (capability + channel safety); channels (send/recv/select); choreographic programming; refinement types; content-addressed code; multi-resume effects (search/nondet/probabilistic); GraalVM native image"))
 
 ;; ── Full home page ───────────────────────────────────────────────
