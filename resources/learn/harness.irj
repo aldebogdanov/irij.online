@@ -1,0 +1,32 @@
+;; Exercise harness for the /learn course.
+;;
+;; resources/learn.js appends this file, then an exercise's `check`
+;; block, to the learner's code and evaluates the whole program in the
+;; playground sandbox (POST /eval). scripts/check-course.irj does the
+;; same with each exercise's solution. Each `course-check` prints one
+;; line the page turns into a ✓ or ✗:
+;;
+;;   @@pass <label>
+;;   @@fail <label>@@<expected>@@<got>
+;;
+;; The thunk runs under `try`, so one failing check doesn't stop the
+;; ones after it. Names start with `course-` to stay clear of the
+;; learner's own.
+
+fn course-show
+  (v -> course-unwrap (to-str (Ok v)))
+
+fn course-unwrap
+  (s -> substring s 3 (length s))
+
+fn course-check ::: Console
+  => label thunk want
+  r := try thunk
+  match r
+    Ok got =>
+      if (got == want)
+        println ("@@pass " ++ label)
+      else
+        println ("@@fail " ++ label ++ "@@" ++ course-show want ++ "@@" ++ course-show got)
+    Err e =>
+      println ("@@fail " ++ label ++ "@@" ++ course-show want ++ "@@error: " ++ to-str e)

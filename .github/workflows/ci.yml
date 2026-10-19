@@ -36,6 +36,8 @@ jobs:
           sleep 5
           RESPONSE=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:8080)
           BODY=$(curl -s http://localhost:8080)
+          LEARN=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:8080/learn/hello)
+          LESSON=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:8080/learn/hello.md)
           kill $SERVER_PID || true
           if [ "$RESPONSE" != "200" ]; then
             echo "Server returned HTTP $RESPONSE, expected 200"
@@ -45,7 +47,17 @@ jobs:
             echo "Response does not contain HTML"
             exit 1
           fi
+          if [ "$LEARN" != "200" ] || [ "$LESSON" != "200" ]; then
+            echo "/learn/hello returned $LEARN and its Markdown $LESSON, expected 200"
+            exit 1
+          fi
           echo "Smoke test passed: HTTP 200 with HTML response"
+
+      - name: Course lessons run as written
+        # Every ```irij block of resources/learn/*.md runs (or fails, when
+        # marked so) and every exercise's solution passes its checks while
+        # its starter doesn't — through the same sandbox as POST /eval.
+        run: java -jar irij.jar scripts/check-course.irj
 
       - name: Playground process evaluates code and needs no state
         run: |
