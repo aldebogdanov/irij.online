@@ -1,0 +1,202 @@
+;; check-course.irj — run every code block of the /learn course.
+;;
+;;   irij run scripts/check-course.irj            ;; all lessons
+;;   irij run scripts/check-course.irj effects    ;; just resources/learn/effects.md
+;;
+;; Run from the repo root. Code goes through the same sandboxed eval the
+;; playground's POST /eval uses, so a block passes here exactly when it
+;; passes in the browser. What each fence must do:
+;;
+;;   ```irij           runs without error
+;;   ```irij fails     raises an error (the lesson is showing one)
+;;   ```irij static    shown only, not run
+;;
+;; and inside a `:::exercise id Title` … `:::` container:
+;;
+;;   ```irij starter   what the learner starts from; must NOT pass yet
+;;   ```irij solution  must pass: every check prints @@pass, or its
+;;                     output equals the `text expect` block
+;;   ```irij check     appended after resources/learn/harness.irj
+;;   ```text expect    the exact output the program must print
+;;   ```hint           shown on request, not run
+;;
+;; Exits 1 when anything fails.
+
+use std.fs :as fs
+use std.fs {FileIO}
+
+course-dir := "resources/learn"
+eval-ms := 10000
+
+;; ── Parsing ─────────────────────────────────────────────────────────
+
+empty-ex := {id= "" title= "" starter= "" solution= "" check= "" expect= "" line= 0}
+
+fn fence-role :: Str Str
+  "irij starter" => "starter"
+  "irij solution" => "solution"
+  "irij check" => "check"
+  "text expect" => "expect"
+  _ => ""
+
+fn exercise-head :: Str Int Map
+  => line n
+  words := split (trim (substring line 11 (length line))) " "
+  title := join " " (drop 1 words)
+  {...empty-ex id= (head words) title= title line= n}
+
+fn close-fence :: Map Map
+  => st
+  code := join "\n" st.buf
+  if (st.in-ex)
+    role := fence-role st.fence
+    if (role == "")
+      {...st fence= ""}
+    else
+      {...st fence= "" ex= (assoc st.ex role code)}
+  else
+    item := {kind= st.fence code= code line= st.start}
+    {...st fence= "" items= (conj st.items item)}
+
+fn step-line :: Map Str Map
+  => st line
+  n := st.n + 1
+  s := {...st n= n}
+  if (s.fence /= "")
+    if (trim line == "```")
+      close-fence s
+    else
+      {...s buf= (conj s.buf line)}
+  else if (starts-with? line "```")
+    {...s fence= (trim (substring line 3 (length line))) buf= #[] start= n}
+  else if (starts-with? line ":::exercise")
+    {...s in-ex= true ex= (exercise-head line n)}
+  else if (s.in-ex && trim line == ":::")
+    item := assoc s.ex "kind" "exercise"
+    {...s in-ex= false ex= empty-ex items= (conj s.items item)}
+  else
+    s
+
+fn parse-lesson :: Str Vec
+  => text
+  start := {n= 0 fence= "" buf= #[] start= 0 in-ex= false ex= empty-ex items= #[]}
+  final := fold step-line start (split text "\n")
+  final.items
+
+;; ── Running ─────────────────────────────────────────────────────────
+
+harness-src := with fs.default-fs do (fs.fs-read (course-dir ++ "/harness.irj"))
+
+fn run :: Str Map
+  (code -> raw-nrepl-eval-sandboxed code eval-ms)
+
+fn with-checks :: Str Str Str
+  (code check -> code ++ "\n\n" ++ harness-src ++ "\n\n" ++ check)
+
+fn out-lines :: Map Vec
+  (r -> split (trim (to-str (get "stdout" r))) "\n")
+
+fn count-prefix :: Vec Str Int
+  (lines prefix -> length (lines |> /? (l -> starts-with? l prefix)))
+
+;; One-line verdict per check: "" when it holds, else what went wrong.
+fn checks-verdict :: Map Str
+  => r
+  lines := out-lines r
+  passes := count-prefix lines "@@pass"
+  fails := count-prefix lines "@@fail"
+  if (get "ok" r)
+    if (fails > 0)
+      "failed: " ++ join "; " (lines |> /? (l -> starts-with? l "@@fail"))
+    else if (passes == 0)
+      "no check ran"
+    else
+      ""
+  else
+    "error: " ++ to-str (get "error" r)
+
+fn expect-verdict :: Map Str Str
+  => r want
+  got := trim (to-str (get "stdout" r))
+  if (! (get "ok" r))
+    "error: " ++ to-str (get "error" r)
+  else if (got == trim want)
+    ""
+  else
+    "printed:\n" ++ got ++ "\n  expected:\n" ++ trim want
+
+fn exercise-problems :: Map Vec
+  => ex
+  missing := #["starter" "solution"] |> /? (k -> get k ex == "")
+  if (! (empty? missing))
+    #[("missing " ++ join ", " missing)]
+  else if (ex.check /= "")
+    solved := checks-verdict (run (with-checks ex.solution ex.check))
+    unsolved := checks-verdict (run (with-checks ex.starter ex.check))
+    p1 := if (solved == "") #[] else #[("solution " ++ solved)]
+    p2 := if (unsolved == "") #["starter already passes"] else #[]
+    p1 ++ p2
+  else if (ex.expect /= "")
+    solved := expect-verdict (run ex.solution) ex.expect
+    unsolved := expect-verdict (run ex.starter) ex.expect
+    p1 := if (solved == "") #[] else #[("solution " ++ solved)]
+    p2 := if (unsolved == "") #["starter already passes"] else #[]
+    p1 ++ p2
+  else
+    #["no check or expect block"]
+
+fn example-problems :: Map Vec
+  => item
+  if (item.kind == "irij")
+    r := run item.code
+    if (get "ok" r) #[] else #[("error: " ++ to-str (get "error" r))]
+  else if (item.kind == "irij fails")
+    r := run item.code
+    if (get "ok" r) #["ran without error, but the lesson says it fails"] else #[]
+  else
+    #[]
+
+fn item-label :: Map Str
+  => item
+  if (item.kind == "exercise")
+    "exercise " ++ item.id
+  else
+    item.kind ++ " block"
+
+fn item-problems :: Map Vec
+  (item -> if (item.kind == "exercise") (exercise-problems item) else (example-problems item))
+
+;; Prints each problem and returns how many there were.
+fn check-lesson ::: Console FileIO
+  => slug
+  path := course-dir ++ "/" ++ slug ++ ".md"
+  items := parse-lesson (fs.fs-read path)
+  runnable := items |> /? (i -> i.kind == "irij" || i.kind == "irij fails" || i.kind == "exercise")
+  exercises := items |> /? (i -> i.kind == "exercise")
+  report := (acc item -> acc + report-item path item)
+  bad := fold report 0 runnable
+  mark := if (bad == 0) "ok  " else "FAIL"
+  println (mark ++ " " ++ slug ++ " — " ++ to-str (length runnable) ++ " blocks, " ++ to-str (length exercises) ++ " exercises")
+  bad
+
+fn report-item ::: Console
+  => path item
+  problems := item-problems item
+  print-problem := (acc p -> println ("     " ++ path ++ ":" ++ to-str item.line ++ " " ++ item-label item ++ ": " ++ p))
+  fold print-problem () problems
+  length problems
+
+fn lesson-slugs ::: FileIO
+  =>
+  names := fs.fs-list-dir course-dir
+  names |> /? (n -> ends-with? n ".md") |> @ (n -> substring n 0 (length n - 3)) |> sort
+
+args := program-args ()
+slugs := if (empty? args) (with fs.default-fs do (lesson-slugs ())) else args
+total := with fs.default-fs do (fold (acc s -> acc + check-lesson s) 0 slugs)
+
+if (total == 0)
+  println ("all " ++ to-str (length slugs) ++ " lessons pass")
+else
+  println (to-str total ++ " problem(s)")
+  System/exit 1

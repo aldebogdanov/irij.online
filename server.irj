@@ -34,6 +34,7 @@ irij-version := "REPLACES_IN_RELEASE_CI"
 run-mode := if (empty? (program-args ())) "site" else (head (program-args ()))
 playground-external := (env "IRIJ_PLAYGROUND" "") == "external"
 playground-port := convert.to-int (env "PLAYGROUND_PORT" "8081")
+site-port := convert.to-int (env "PORT" "8080")
 
 ;; ═══════════════════════════════════════════════════════════════════
 ;; Seed Registry — Database
@@ -462,6 +463,7 @@ fn make-nav
                   ++ "<label for=\"nav-toggle\" class=\"nav-toggle-label\" aria-label=\"Toggle menu\">☰</label>"
                   ++ "<nav class=\"nav-links\">"
                   ++ "<a href=\"/\" class=\"" ++ (if (active == "/") "active" else "") ++ "\">Home</a>"
+                  ++ "<a href=\"/learn\" class=\"" ++ (if (active == "/learn") "active" else "") ++ "\">Learn</a>"
                   ++ "<a href=\"/seeds\" class=\"" ++ (if (active == "/seeds") "active" else "") ++ "\">Seeds</a>"
                   ++ "<a href=\"/playground\" class=\"" ++ (if (active == "/playground") "active" else "") ++ "\">Playground</a>"
                   ++ "<a href=\"/docs\" class=\"" ++ (if (active == "/docs") "active" else "") ++ "\">Docs</a>"
@@ -509,6 +511,7 @@ fn home-hero
                                                (badge "Virtual Threads" "badge")
                                                (badge "ANTLR4" "badge")])
                          (div (cls "cta-row") #[(a {class= "cta cta-primary" href= "#install"} #["Install Irij"])
+                                                (a {class= "cta" href= "/learn"} #["Learn Irij"])
                                                 (a {class= "cta" href= "/playground"} #["Try in browser"])])])
 
 ;; ── Install ──────────────────────────────────────────────────────
@@ -912,6 +915,133 @@ pg-examples := #[
 
 fn handle-examples
   (_ -> serve.json-response (json-encode pg-examples))
+
+;; ═══════════════════════════════════════════════════════════════════
+;; Learn — the interactive course
+;; ═══════════════════════════════════════════════════════════════════
+;;
+;; Each lesson is Markdown in resources/learn/<slug>.md. The server
+;; renders the shell (title, lesson list, prev/next); resources/learn.js
+;; fetches the Markdown, turns every ```irij block into a live editor
+;; and checks exercises by sending learner code + resources/learn/
+;; harness.irj + the exercise's checks to POST /eval — the playground's
+;; sandbox. scripts/check-course.irj runs every block the same way.
+;; Order, titles and parts live here.
+
+learn-parts := #["Foundations" "Modelling data" "Effects" "Going further"]
+
+learn-lessons := #[
+  {slug= "hello" part= "Foundations" title= "Hello, Irij" blurb= "Your first program: printing, strings, interpolation, and how arguments group."}
+  {slug= "values" part= "Foundations" title= "Values and bindings" blurb= "Integers that never overflow, exact fractions, strings, keywords — and names, mutable or not."}
+  {slug= "functions" part= "Foundations" title= "Functions" blurb= "Three ways to write a body, currying, lambdas, and operators as values."}
+  {slug= "control" part= "Foundations" title= "Choosing and repeating" blurb= "if, match with guards, and recursion where other languages loop."}
+  {slug= "collections" part= "Foundations" title= "Collections" blurb= "Vectors, maps, sets, tuples and ranges: immutable, and cheap to update."}
+  {slug= "pipelines" part= "Foundations" title= "Pipelines" blurb= "Data flowing left to right: |>, map, filter, reduce and the other digraphs."}
+  {slug= "patterns" part= "Foundations" title= "Pattern matching" blurb= "Take vectors, maps and tuples apart in bindings, arguments and match arms."}
+  {slug= "specs" part= "Modelling data" title= "Specs" blurb= "Sum and product specs, constructors, annotated fns, and checks at the boundary."}
+  {slug= "protocols" part= "Modelling data" title= "Protocols" blurb= "One name, many types: proto and impl."}
+  {slug= "errors" part= "Modelling data" title= "Errors and contracts" blurb= "error and try, Ok and Err, and pre/post conditions that know whom to blame."}
+  {slug= "effect-rows" part= "Effects" title= "Effect rows" blurb= "Pure by default: what ::: Console means and how the compiler holds you to it."}
+  {slug= "handlers" part= "Effects" title= "Effects and handlers" blurb= "Declare an effect, give it meaning with a handler, swap the meaning freely."}
+  {slug= "handlers-in-practice" part= "Effects" title= "Handlers in practice" blurb= "State, composition, aborting, on-failure — and testing effectful code."}
+  {slug= "concurrency" part= "Going further" title= "Concurrency" blurb= "scope, fork and await on virtual threads; par, race and timeout."}
+  {slug= "modules-java" part= "Going further" title= "Modules and Java" blurb= "The standard library, qualified imports, and calling into the JVM."}
+  {slug= "next-steps" part= "Going further" title= "Capstone and next steps" blurb= "Put it all together, then install Irij and build something real."}
+]
+
+numbered-lessons := learn-lessons |> @i (i l -> {...l n= i + 1})
+
+learn-head-extras := #[
+  (link-tag {rel= "stylesheet" href= "/learn.css"})
+  (el "script" {src= "/learn.js" defer= "defer"} #[])
+]
+
+lesson-head-extras := #[
+  (link-tag {rel= "stylesheet" href= "https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.css"})
+  (el "script" {src= "https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.js"} #[])
+  (el "script" {src= "/irij-mode.js"} #[])
+  (el "script" {src= "https://cdn.jsdelivr.net/npm/marked@12.0.2/marked.min.js"} #[])
+] ++ learn-head-extras
+
+fn lesson-href :: Map Str
+  (l -> "/learn/" ++ l.slug)
+
+fn part-lessons :: Str Vec
+  (part -> numbered-lessons |> /? (l -> l.part == part))
+
+;; ── /learn ──────────────────────────────────────────────────────────
+
+fn learn-card
+  => l
+  el "li" {class= "learn-card" data-slug= l.slug} #[
+    (a {href= (lesson-href l)} #[
+      (span (cls "learn-num") #[(to-str l.n)])
+      (span (cls "learn-card-text") #[
+        (strong {} #[l.title])
+        (span (cls "learn-blurb") #[l.blurb])])
+      (span (cls "learn-status") #[])])]
+
+fn learn-part-section
+  (part -> div (cls "learn-part") #[(h3 {} #[part]) (el "ol" (cls "learn-cards") (part-lessons part |> @ learn-card))])
+
+fn learn-index-page
+  (req ->
+    serve.html ~ layout-head-extra "Learn" learn-head-extras "/learn" #[
+      (div (cls "learn-hero") #[
+        (h2 {} #["Learn Irij"])
+        (p (cls "sub") #["A hands-on course in sixteen short lessons. Every example is a live editor and every exercise is checked as you go — nothing to install. Your progress stays in this browser."])
+        (div (cls "cta-row learn-cta") #[
+          (a {class= "cta cta-primary" id= "learn-continue" href= "/learn/hello"} #["Start with lesson 1"])
+          (span {id= "learn-progress" class= "learn-progress"} #[])])])
+      (div (cls "learn-parts") (learn-parts |> @ learn-part-section))])
+
+;; ── /learn/<slug> ───────────────────────────────────────────────────
+
+fn side-link
+  => current l
+  here := if (l.slug == current) "learn-side-link here" else "learn-side-link"
+  el "li" {data-slug= l.slug} #[(a {class= here href= (lesson-href l)} #[(span (cls "learn-side-num") #[(to-str l.n)]) (span {} #[l.title]) (span (cls "learn-status") #[])])]
+
+fn side-part
+  (current part -> div (cls "learn-side-part") #[(span (cls "learn-side-title") #[part]) (el "ol" {} (part-lessons part |> @ (l -> side-link current l)))])
+
+fn lesson-side :: Str Map
+  (current -> el "nav" {class= "learn-side" aria-label= "Lessons"} (learn-parts |> @ (p -> side-part current p)))
+
+fn pager-link
+  => l label klass
+  if (l == ())
+    span (cls klass) #[]
+  else
+    a {class= klass href= (lesson-href l)} #[(span (cls "learn-pager-dir") #[label]) (span {} #[l.title])]
+
+fn lesson-page-for
+  => l
+  prev := if (l.n == 1) () else (nth (l.n - 2) numbered-lessons)
+  next := get l.n numbered-lessons
+  total := length numbered-lessons
+  serve.html ~ layout-head-extra l.title lesson-head-extras "/learn" #[
+    (div (cls "learn-layout") #[
+      (el "details" {class= "learn-side-wrap"} #[(el "summary" {} #["All lessons"]) (lesson-side l.slug)])
+      (el "article" (cls "learn-main") #[
+        (div (cls "learn-crumb") #[(a {href= "/learn"} #["Learn"]) (span {} #[(" · " ++ l.part ++ " · Lesson " ++ to-str l.n ++ " of " ++ to-str total)])])
+        (h2 {} #[l.title])
+        (div {id= "lesson-body" class= "learn-body" data-slug= l.slug} #[(p (cls "learn-loading") #["Loading lesson…"])])
+        (el "nav" (cls "learn-pager") #[(pager-link prev "← Previous" "learn-prev") (pager-link next "Next →" "learn-next")])])])]
+
+fn lesson-not-found
+  => slug
+  page := serve.html ~ layout "Not Found" "/learn" #[(h2 {} #["Lesson not found"]) (p {} #[("There is no lesson called '" ++ slug ++ "'. ") (a {href= "/learn"} #["See all lessons."])])]
+  {...page status= 404}
+
+fn learn-lesson-page
+  => req
+  slug := head (serve.path-segments req.path "/learn")
+  found := numbered-lessons |> /? (l -> l.slug == slug)
+  if (empty? found)
+    lesson-not-found slug
+  else
+    lesson-page-for (head found)
 
 ;; ═══════════════════════════════════════════════════════════════════
 ;; Seed Registry — Pages
@@ -1653,6 +1783,8 @@ playground-routes := #[
 site-routes := #[
   (serve.route "GET" "/" home-page)
   (serve.route "GET" "/playground" playground-page)
+  (serve.route "GET" "/learn" learn-index-page)
+  (serve.route-prefix "GET" "/learn/" learn-lesson-page)
   (serve.route "GET" "/docs" docs-page)
   (serve.route-prefix "GET" "/docs/" doc-detail-page)
   (serve.route "GET" "/api/examples" handle-examples)
@@ -1679,4 +1811,4 @@ if (run-mode == "playground")
     serve playground-port (serve.router playground-routes)
 else
   with serve.default-serve
-    serve 8080 (serve.router routes)
+    serve site-port (serve.router routes)

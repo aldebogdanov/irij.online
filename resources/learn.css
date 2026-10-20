@@ -1,0 +1,144 @@
+/* learn.css — the /learn course (index + lesson pages).
+   Builds on the site's theme variables (server.irj `css`). */
+
+/* ── Index ──────────────────────────────────────────────────────────── */
+
+.learn-hero { padding: 1.5rem 0 .5rem; }
+.learn-hero h2 { margin-bottom: .5rem; }
+.learn-hero .sub { max-width: 46rem; font-size: 1.05rem; color: var(--font-color); }
+.learn-cta { justify-content: flex-start; align-items: center; }
+.learn-progress { color: var(--muted); font-size: .9rem; }
+
+.learn-part { margin-top: 2rem; }
+.learn-part h3 { font-size: .8rem; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); margin-bottom: .75rem; }
+.learn-cards { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: .75rem; }
+.learn-cards > li { min-width: 0; margin: 0; }
+.learn-card a { display: flex; gap: .9rem; align-items: flex-start; height: 100%; box-sizing: border-box; padding: 1rem 1.1rem; background: var(--card-bg); border: 1px solid var(--border); border-radius: .5rem; text-decoration: none; transition: border-color .15s, box-shadow .15s; }
+.learn-card a:hover { border-color: var(--accent); box-shadow: 0 2px 8px rgba(0,0,0,.05); }
+.learn-num { flex: 0 0 auto; width: 2rem; height: 2rem; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; background: var(--code-bg); border: 1px solid var(--border); color: var(--accent2); font-weight: 600; font-size: .9rem; }
+.learn-card.is-done .learn-num { background: var(--color-success); border-color: var(--color-success); color: #fff; }
+.learn-card-text { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: .2rem; }
+.learn-card-text strong { color: var(--accent2); font-weight: 600; }
+.learn-blurb { color: var(--muted); font-size: .9rem; line-height: 1.5; }
+.learn-status { flex: 0 0 auto; font-size: .8rem; color: var(--color-success); font-weight: 600; }
+
+/* ── Lesson layout ──────────────────────────────────────────────────── */
+
+.learn-layout { display: grid; grid-template-columns: 230px minmax(0, 1fr); gap: 2.5rem; align-items: start; padding-top: 1.5rem; }
+.learn-side-wrap { position: sticky; top: 1rem; max-height: calc(100vh - 2rem); overflow-y: auto; font-size: .88rem; }
+.learn-side-wrap > summary { display: none; }
+.learn-side-part { margin-bottom: 1.1rem; }
+.learn-side-title { display: block; font-size: .72rem; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); margin: 0 0 .35rem .5rem; }
+.learn-side ol { list-style: none; margin: 0; padding: 0; }
+.learn-side li { margin: 0; }
+.learn-side-link { display: flex; gap: .5rem; align-items: baseline; padding: .3rem .5rem; border-radius: .35rem; color: var(--font-color); text-decoration: none; line-height: 1.35; }
+.learn-side-link:hover { background: var(--card-bg); color: var(--accent); }
+.learn-side-link.here { background: var(--card-bg); color: var(--accent); font-weight: 600; box-shadow: inset 2px 0 0 var(--accent); }
+.learn-side-num { flex: 0 0 1.3rem; color: var(--muted); font-variant-numeric: tabular-nums; }
+.learn-side-link span:nth-child(2) { flex: 1 1 auto; }
+.learn-side li.is-done .learn-side-num { color: var(--color-success); }
+
+.learn-main { min-width: 0; max-width: 760px; }
+.learn-crumb { font-size: .85rem; color: var(--muted); margin-bottom: .25rem; }
+.learn-crumb a { color: var(--accent); text-decoration: none; }
+.learn-main > h2 { font-size: 2rem; margin-bottom: 1.25rem; }
+.learn-loading, .learn-error { color: var(--muted); }
+.learn-error { color: var(--color-error); }
+
+/* Prose: darker than the site's muted paragraphs — this is reading text. */
+.learn-body .prose p, .learn-body .prose li, .ex-prompt p, .ex-prompt li, .ex-hint p { color: var(--font-color); }
+.learn-body .prose h2 { font-size: 1.35rem; margin: 2.25rem 0 .75rem; padding-top: 1rem; border-top: 1px solid var(--border); }
+.learn-body .prose h3 { font-size: 1.1rem; margin: 1.5rem 0 .5rem; }
+.learn-body .prose ul, .learn-body .prose ol { margin: .5rem 0 1rem 1.5rem; }
+.learn-body .prose li { margin: .25rem 0; }
+.learn-body .prose table { width: 100%; border-collapse: collapse; margin: 1rem 0; font-size: .9rem; display: block; overflow-x: auto; }
+.learn-body .prose th, .learn-body .prose td { border: 1px solid var(--border); padding: .35rem .6rem; text-align: left; vertical-align: top; }
+.learn-body .prose th { background: var(--code-bg); }
+.learn-body .prose blockquote { border-left: 3px solid var(--accent); margin: 1rem 0; padding: .25rem 0 .25rem 1rem; }
+.learn-body .prose blockquote p { color: var(--muted); }
+.learn-body :not(pre) > code { background: var(--code-bg); border: 1px solid var(--border); padding: .05rem .3rem; border-radius: .25rem; font-size: .86em; overflow-wrap: anywhere; }
+.learn-body kbd { font-family: var(--font-family-mono); font-size: .8em; padding: .05rem .35rem; border: 1px solid var(--border); border-bottom-width: 2px; border-radius: .25rem; background: var(--card-bg); }
+
+/* ── Code cells ─────────────────────────────────────────────────────── */
+
+/* JetBrains Mono draws |> as ▷ and -> as → through contextual
+   alternates. Learners need to see the characters they will type. */
+.learn-body code, .learn-body pre, .learn-body .CodeMirror, .cell-out { font-variant-ligatures: none; font-feature-settings: "liga" 0, "calt" 0; }
+
+.cell { margin: 1rem 0 1.25rem; border: 1px solid var(--border); border-radius: .5rem; overflow: hidden; background: var(--code-bg); }
+.cell-editor .CodeMirror { height: auto; font-family: var(--font-family-mono); font-size: .86rem; line-height: 1.55; background: var(--code-bg); padding: .55rem .25rem; }
+.cell-editor .CodeMirror-cursor { border-left-color: var(--accent); }
+.cell-editor .CodeMirror-selected { background: rgba(230,126,34,.14) !important; }
+.cell-static .CodeMirror-cursor { display: none !important; }
+.cell-editor .cm-keyword { color: #e67e22; font-weight: bold; }
+.cell-editor .cm-builtin { color: #2563eb; }
+.cell-editor .cm-type { color: #7c3aed; }
+.cell-editor .cm-atom { color: #0d9488; }
+.cell-editor .cm-number { color: #2563eb; }
+.cell-editor .cm-string { color: #16a34a; }
+.cell-editor .cm-comment { color: #9ca3af; font-style: italic; }
+.cell-editor .cm-operator { color: #be185d; }
+.cell-editor .cm-def { color: #be185d; }
+.cell-editor .cm-bracket { color: var(--muted); }
+
+.cell-bar { display: flex; flex-wrap: wrap; align-items: center; gap: .4rem; padding: .45rem .6rem; border-top: 1px solid var(--border); background: var(--card-bg); }
+.cell-btn { font-family: inherit; font-size: .8rem; padding: .3rem .85rem; border: 1px solid var(--border); border-radius: .35rem; background: var(--card-bg); color: var(--font-color); cursor: pointer; line-height: 1.4; }
+.cell-btn:hover { background: var(--bg-color); }
+.cell-btn.run { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 600; }
+.cell-btn.run:hover { opacity: .9; }
+.cell-btn:disabled { opacity: .55; cursor: progress; }
+.cell-spacer { flex: 1 1 auto; }
+.cell-link { font-size: .8rem; color: var(--muted); text-decoration: none; }
+.cell-link:hover { color: var(--accent); }
+.cell-tag { font-size: .72rem; padding: .1rem .5rem; border-radius: 1rem; background: #fef3c7; color: #92400e; }
+
+.cell-out { border-top: 1px solid var(--border); padding: .6rem .9rem; background: #fff; font-family: var(--font-family-mono); font-size: .84rem; line-height: 1.55; white-space: pre-wrap; word-break: break-word; max-height: 320px; overflow-y: auto; }
+.cell-out span { display: block; }
+.cell-out .out { color: var(--font-color); }
+.cell-out .val { color: #0d9488; }
+.cell-out .err { color: var(--color-error); }
+.cell-out .info { color: var(--muted); font-style: italic; }
+.cell-out .pass { color: var(--color-success); font-weight: 600; }
+.cell-out .fail { color: var(--color-error); }
+.cell-out .want { color: var(--font-color); background: var(--code-bg); border-left: 3px solid var(--color-success); padding: .2rem .5rem; margin-top: .25rem; }
+
+/* ── Exercises ──────────────────────────────────────────────────────── */
+
+.exercise { margin: 2rem 0; padding: 1.1rem 1.2rem .4rem; border: 1px solid var(--border); border-left: 4px solid var(--accent); border-radius: .5rem; background: var(--card-bg); }
+.exercise.solved { border-left-color: var(--color-success); }
+.ex-head { display: flex; align-items: baseline; gap: .6rem; flex-wrap: wrap; }
+.ex-head h3 { margin: 0; font-size: 1.1rem; }
+.ex-tag { font-size: .7rem; text-transform: uppercase; letter-spacing: .08em; color: var(--accent); font-weight: 600; }
+.exercise.solved .ex-tag { color: var(--color-success); }
+.ex-state { margin-left: auto; font-size: .85rem; font-weight: 600; color: var(--color-success); }
+.ex-prompt { margin-top: .5rem; }
+.exercise .cell { background: var(--code-bg); }
+.ex-hint { margin: -.5rem 0 1rem; padding: .6rem .9rem; border-radius: .4rem; background: #fffbeb; border: 1px solid #fde68a; font-size: .92rem; }
+.ex-hint p { margin: 0; }
+
+/* ── Prev / next ────────────────────────────────────────────────────── */
+
+.learn-pager { display: flex; justify-content: space-between; gap: 1rem; margin: 3rem 0 1rem; padding-top: 1.5rem; border-top: 1px solid var(--border); }
+.learn-pager a { display: flex; flex-direction: column; gap: .15rem; padding: .7rem 1rem; border: 1px solid var(--border); border-radius: .5rem; background: var(--card-bg); text-decoration: none; color: var(--accent2); font-weight: 600; max-width: 48%; }
+.learn-pager a:hover { border-color: var(--accent); }
+.learn-pager .learn-next { margin-left: auto; text-align: right; }
+.learn-pager-dir { font-size: .75rem; font-weight: 500; color: var(--muted); }
+
+/* ── Narrow screens: lesson list folds into a disclosure ─────────────── */
+
+@media (max-width: 900px) {
+  .learn-layout { grid-template-columns: minmax(0, 1fr); gap: 1rem; padding-top: 1rem; }
+  .learn-side-wrap { position: static; max-height: none; border: 1px solid var(--border); border-radius: .5rem; background: var(--card-bg); padding: .5rem .75rem; }
+  .learn-side-wrap > summary { display: list-item; cursor: pointer; font-weight: 600; color: var(--accent2); padding: .2rem 0; }
+  .learn-side-wrap[open] > summary { margin-bottom: .6rem; }
+  .learn-main > h2 { font-size: 1.6rem; }
+}
+
+@media (max-width: 560px) {
+  .container { padding: 0 1rem; }
+  .learn-cards { grid-template-columns: minmax(0, 1fr); }
+  .exercise { padding: .9rem .8rem .3rem; }
+  .learn-pager { flex-direction: column; }
+  .learn-pager a { max-width: none; }
+  .learn-pager .learn-next { margin-left: 0; }
+}
