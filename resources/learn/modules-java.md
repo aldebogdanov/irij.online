@@ -82,20 +82,36 @@ println (pricing.with-tax 1000)
 
 ## Calling Java
 
-Irij runs on the JVM, and every Java class is one slash away. `Class/member` calls a static method or reads a static field; `Class/new` constructs; `value.method args` calls an instance method. Classes in `java.lang` need no package:
+Irij runs on the JVM, and every Java class is one slash away. `Class/member` calls a static method or reads a static field; `Class/new` constructs; `value#method args` calls a method on a Java object (the `String#trim` notation of Java's own docs). Classes in `java.lang` need no package:
 
 ```irij
 println (Math/hypot 3.0 4.0)
 println (Long/MAX_VALUE)
 println (Integer/toBinaryString 42)
-println ("irij".toUpperCase ())
+println ("irij"#toUpperCase ())
 
 date := java.time.LocalDate/of 2026 10 15
-println (date.getDayOfWeek ())
-println (date.plusDays 30)
+println (date#getDayOfWeek ())
+println (date#plusDays 30)
 ```
 
 A method with no arguments still needs `()`. And because `a/b` with no spaces is a Java reference, always put spaces around division: `a / b`.
+
+`.` stays Irij's own — a record or map field, a module's member. On a Java object it is an error that tells you the `#` spelling:
+
+```irij fails
+println ("irij".toUpperCase ())
+```
+
+Written with a space before it, `#method` is a *method reference*: a function that calls that method on whatever it is given. Arguments after the name go to the method:
+
+```irij
+println (#["ann" "bo"] |> @ #toUpperCase)
+println ("  padded  " |> #trim)
+
+date := java.time.LocalDate/of 2026 10 15
+println (#[date] |> @ (#plusDays 30))
+```
 
 Java can do anything — read files, open sockets, exit the process — so Irij can't take a Java call on trust. Calling Java is the `JVM` effect, and a function that does it must say so:
 
@@ -191,7 +207,7 @@ fn days-until-2030 ::: JVM
   => date
   new-year := java.time.LocalDate/of 2030 1 1
   days := java.time.temporal.ChronoUnit/DAYS
-  days.between date new-year
+  days#between date new-year
 ```
 
 ```irij check
@@ -200,6 +216,6 @@ course-check "from 15 October 2026" (-> days-until-2030 (java.time.LocalDate/of 
 ```
 
 ```hint
-Bind the constant first — `days := java.time.temporal.ChronoUnit/DAYS` — then call `days.between date new-year`, where `new-year` is `java.time.LocalDate/of 2030 1 1`. The function calls Java, so it needs `::: JVM`.
+Bind the constant first — `days := java.time.temporal.ChronoUnit/DAYS` — then call `days#between date new-year`, where `new-year` is `java.time.LocalDate/of 2030 1 1`. The function calls Java, so it needs `::: JVM`.
 ```
 :::
