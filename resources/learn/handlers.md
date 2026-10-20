@@ -71,7 +71,7 @@ println (with always-ada do (greet-user ()))
 println (with always-grace do (greet-user ()))
 ```
 
-<!-- engine-limit: code-after-resume — code after `resume` was skipped; fixed by irij fix/effect-gaps: teach `r := resume v` then wrapping r (deep handlers), drop "make resume the last thing" -->
+<!-- engine-limit: code-after-resume — the released engine silently skips code after `resume`; from aldebogdanov/irij#64 it's a compile error ("code after `resume` never runs"). Then: say why resume is last (it doesn't come back to the clause) and add an `irij fails` block showing the error -->
 Same function, two behaviours, chosen by the caller. Make `resume` the last thing a clause does.
 
 ## Clauses with effects of their own
