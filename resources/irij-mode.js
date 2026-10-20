@@ -163,6 +163,11 @@
         return 'bracket';
       }
 
+      // Java interop: obj#member, and the method reference #member
+      if (stream.match(/^#[A-Za-z_$][A-Za-z0-9_$]*/)) {
+        return 'builtin';
+      }
+
       // Single-char operators and punctuation
       if ('~+-*%<>=|.'.indexOf(ch) > -1) {
         stream.next();
