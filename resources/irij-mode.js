@@ -13,7 +13,8 @@
 
   CodeMirror.defineMode('irij', function() {
     // Keep in sync with the Irij repo: keywords = the lowercase literal
-    // tokens of src/main/antlr/IrijLexer.g4 (`model` is soft, see below);
+    // tokens of src/main/antlr/IrijLexer.g4 (`model`, `cond` and `case`
+    // are soft, see below);
     // builtins = what a file reaches without an import
     // (IntrinsicsEmitter.NAMES + pi, e, resume). The repo's
     // EditorGrammarSyncTest pins the same lists for Emacs and TextMate.
@@ -125,6 +126,15 @@
         if (word === 'model' &&
             /^\s*(?:pub\s+)?model$/.test(stream.string.slice(0, stream.pos)) &&
             /^\s+[a-z]/.test(stream.string.slice(stream.pos))) return 'keyword';
+        // `cond` / `case` are keywords only where an expression starts and
+        // opens arms: `cond` ends its line, `case` takes a scrutinee
+        if (word === 'cond' || word === 'case') {
+          var before = stream.string.slice(0, stream.start);
+          var after = stream.string.slice(stream.pos);
+          if (/(?:^\s*|(?::=|:!|<-|=>|~)\s*)$/.test(before) &&
+              (word === 'cond' ? /^\s*(?:;;.*)?$/ : /^\s+[^\s:=<|+*\/-]/).test(after))
+            return 'keyword';
+        }
         if (constants.has(word)) return 'atom';
         if (builtins.has(word)) return 'builtin';
         return 'variable';

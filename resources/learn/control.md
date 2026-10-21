@@ -1,5 +1,4 @@
-<!-- engine-limit: no-cond-case — irij feat/case-cond adds `cond` and `case` (spec §2.3a): teach them in this lesson, after `match` -->
-Irij has no `for` or `while`. To choose, you use `if` and `match`; to repeat, a function calls itself — or, very often, a pipeline does the looping for you (lesson 6).
+Irij has no `for` or `while`. To choose, you use `if`, `match`, `cond` and `case`; to repeat, a function calls itself — or, very often, a pipeline does the looping for you (lesson 6).
 
 ## if … else
 
@@ -83,6 +82,41 @@ println (classify 1000)
 
 The same arms work directly as a function body (lesson 3's second form), as `classify` shows — a function whose body is arms is a `match` on its argument.
 
+## cond and case
+
+A long `if … else if … else` chain repeats itself. `cond` writes the same choice as a column of arms: each arm is a condition, the first one that holds wins, and `_` is the fallback.
+
+```irij
+fn advice
+  => temperature
+  cond
+    temperature > 25 => "shorts"
+    temperature > 15 => "a light jacket"
+    _ => "a coat"
+
+println (advice 18)
+println (advice 30)
+```
+
+`case` compares one value with `==` against each arm. An arm can list several values, and add a guard like a `match` arm. The values are expressions — a name is **looked up**, never bound:
+
+```irij
+quit-key := "q"
+
+fn command
+  => input
+  case input
+    "help" "?" => "showing help"
+    quit-key => "bye"
+    _ => "unknown: " ++ input
+
+println (command "?")
+println (command "q")
+println (command "x")
+```
+
+In a `match`, the arm `quit-key => …` would bind any input to a new name `quit-key` and always win. Use `match` to take a value apart; use `case` when the arms are values to compare against, including ones held in names. Both are expressions, and with no `_` arm, falling through every arm is an error.
+
 ## Recursion
 
 To repeat something, call the function again with a smaller problem, and stop at a base case:
@@ -96,14 +130,25 @@ println (factorial 5)
 println (factorial 30)
 ```
 
-<!-- engine-limit: match-arm-tco — fixed by irij fix/match-arm-tco: say match-arm bodies are tail calls too -->
-When the recursive call is the **last thing** a lambda or imperative body does, Irij reuses the stack frame, so it can run a million times without overflowing. Carry the running result in an extra parameter (an *accumulator*) to get there:
+When the recursive call is the **last thing** a lambda or imperative body does — or the last thing in an arm of `match`, `cond` or `case` — Irij reuses the stack frame, so it can run a million times without overflowing. Carry the running result in an extra parameter (an *accumulator*) to get there:
 
 ```irij
 fn sum-to
   (total n -> if (n == 0) total else (sum-to (total + n) (n - 1)))
 
 sum-to 0 1000000
+```
+
+The same holds for a call in an arm:
+
+```irij
+fn count-down
+  => n steps
+  match n
+    0 => steps
+    _ => count-down (n - 1) (steps + 1)
+
+count-down 1000000 0
 ```
 
 :::exercise fizzbuzz FizzBuzz

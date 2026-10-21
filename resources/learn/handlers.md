@@ -71,8 +71,23 @@ println (with always-ada do (greet-user ()))
 println (with always-grace do (greet-user ()))
 ```
 
-<!-- engine-limit: code-after-resume — the released engine silently skips code after `resume`; from aldebogdanov/irij#64 it's a compile error ("code after `resume` never runs"). Then: say why resume is last (it doesn't come back to the clause) and add an `irij fails` block showing the error -->
-Same function, two behaviours, chosen by the caller. Make `resume` the last thing a clause does.
+Same function, two behaviours, chosen by the caller.
+
+`resume` hands its value to the paused code, which carries on from there — it never comes back to the clause. So `resume` is a clause's **last step**: on its own, or at the end of an `if` / `match` branch that ends the clause. Code after it would never run, and Irij refuses to compile it:
+
+```irij fails
+effect Ask
+  ask :: Str -> Str
+
+handler chatty :: Ask ::: Console
+  ask _ =>
+    resume "Ada"
+    println "answered"
+
+with chatty do (ask "name?")
+```
+
+Anything a clause does besides answering — printing, counting, logging — goes *before* `resume`, as in the next section.
 
 ## Clauses with effects of their own
 
@@ -120,6 +135,39 @@ handler frozen :: Clock
   zone () => resume "UTC"
 
 with frozen do (timestamp ())
+```
+
+## The built-in effects are effects too
+
+`Console` and `Time` from the last lesson work the same way. `println`, `print` and `read-line` perform `Console`'s operations of the same names; `now-ms` and `sleep` perform `Time`'s `time-now` and `time-sleep` (declared in `std.time`). A handler with a clause for the operation answers it; with none, the builtin does the real thing.
+
+So the `timed` function from the last lesson, which reads the real clock, gets the same answer every time under a frozen one:
+
+```irij
+use std.time {Time}
+
+fn timed :: Str Int ::: Console Time
+  => label
+  start := now-ms ()
+  println ("running " ++ label)
+  now-ms () - start
+
+handler frozen-clock :: Time
+  time-now => resume 1700000000000
+
+println (with frozen-clock do (timed "a quick job"))
+```
+
+`time-now` takes no argument, so its clause has no pattern: `time-now => …`. A handler may also leave a clause out — `frozen-clock` has none for `time-sleep`, so `sleep` still really waits. A `Console` handler can reshape output; its clause calls the real `println`, since a clause isn't handled by its own handler:
+
+```irij
+handler shouting :: Console ::: Console
+  println msg =>
+    println (upper-case (to-str msg))
+    resume ()
+
+with shouting
+  println "hello from inside"
 ```
 
 That's the whole trick behind testing effectful code in Irij: production gets a handler that talks to the real world, tests get one that answers from a script. The next lesson builds on it.

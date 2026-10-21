@@ -94,8 +94,15 @@ people := #[{name= "Tim" age= 9} {name= "Ann" age= 34} {name= "Lee" age= 51}]
 first-adult people
 ```
 
-<!-- engine-limit: lambda-param-patterns — fixed by irij fix/pattern-gaps: lambdas take patterns, `(#(a b) -> a + b)`; also `#(:ok v)` tuple patterns now work -->
-One limit to know: a lambda's parameters are plain names (or `_`). When you want to take an argument apart, write a `fn` with arms, or match inside the body.
+Lambdas take patterns too, so a short function can take its argument apart in place:
+
+```irij
+pairs := #[#(1 2) #(3 4) #(5 6)]
+println (pairs |> @ (#(a b) -> a + b))
+
+people := #[{name= "Ann" age= 34} {name= "Lee" age= 51}]
+println (people |> @ ({name= n} -> n))
+```
 
 :::exercise count-up Count without length
 Write `count`, which returns how many elements a vector has — without using `length` or `/#`. Use the `#[]` and `#[x ...rest]` patterns.
@@ -122,12 +129,11 @@ An empty vector has 0 elements; a non-empty one has 1 more than its rest.
 ```
 :::
 
-<!-- engine-limit: bool-patterns — the shipping exercise uses `speed= :express` because `true`/`false` patterns matched anything; fixed by irij fix/pattern-gaps, `{express= true}` can come back -->
 :::exercise shipping Shipping label
 Orders are maps. Write `shipping`, which returns:
 
 - `"free"` for an order whose `country` is `"NO"` (whatever else it has),
-- `"express"` when the order's `speed` is `:express`,
+- `"express"` when the order's `express` field is `true`,
 - `"standard"` otherwise.
 
 The country rule wins over express.
@@ -140,19 +146,19 @@ fn shipping
 ```irij solution
 fn shipping
   {country= "NO"} => "free"
-  {speed= :express} => "express"
+  {express= true} => "express"
   _ => "standard"
 ```
 
 ```irij check
-course-check "Norway is free" (-> shipping {country= "NO" speed= :express}) "free"
-course-check "express elsewhere" (-> shipping {country= "SE" speed= :express}) "express"
-course-check "plain order" (-> shipping {country= "SE" speed= :normal}) "standard"
+course-check "Norway is free" (-> shipping {country= "NO" express= true}) "free"
+course-check "express elsewhere" (-> shipping {country= "SE" express= true}) "express"
+course-check "plain order" (-> shipping {country= "SE" express= false}) "standard"
 course-check "no fields at all" (-> shipping {}) "standard"
 ```
 
 ```hint
-Three arms with map patterns, most specific first. A field with a literal pattern — a string or a keyword — only matches that exact value.
+Three arms with map patterns, most specific first. A field with a literal pattern — a string, `true`, `false` — only matches that exact value.
 ```
 :::
 
