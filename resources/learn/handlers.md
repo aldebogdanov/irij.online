@@ -73,6 +73,8 @@ println (with always-grace do (greet-user ()))
 
 Same function, two behaviours, chosen by the caller.
 
+Inline `with`s nest, and one can sit inside a larger expression: `with always-ada do (with always-grace do (greet-user ()))` is Grace's greeting — the innermost handler answers first.
+
 `resume` hands its value to the paused code, which carries on from there — it never comes back to the clause. So `resume` is a clause's **last step**: on its own, or at the end of an `if` / `match` branch that ends the clause. Code after it would never run, and Irij refuses to compile it:
 
 ```irij fails
