@@ -39,7 +39,7 @@
       'starts-with?', 'ends-with?', 'replace', 'substring', 'char-at', 'index-of',
       'char-code', 'from-char-code',
       'json-parse', 'json-encode', 'json-encode-pretty',
-      'url-encode', 'url-decode', 'toml-parse',
+      'url-encode', 'url-decode', 'percent-encode', 'toml-parse',
       'sha256-hex', 'hmac-sha256-hex', 'pbkdf2-sha256-hex',
       'random-token', 'constant-time-eq?',
       'spawn', 'sleep', 'await', 'timeout', 'par', 'race', 'try',
