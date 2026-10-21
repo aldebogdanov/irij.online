@@ -72,7 +72,7 @@ println outbox.sent
 
 In production you'd write a `smtp` handler for `Mailer` with `::: JVM` or a network effect in its row, and `remind-overdue` wouldn't change by a single character.
 
-The built-in effects work the same way. `println`, `print` and `read-line` perform `Console`'s operations of the same names, `now-ms` and `sleep` perform `Time`'s `time-now` and `time-sleep`, and `random-int` performs `Random`'s `rand-int`. A handler with a clause for the operation answers it; with none, the builtin does the real thing. So code that prints and reads the clock is testable as it stands:
+The built-in effects work the same way, as the last lesson's frozen clock showed — `random-int` too, which performs `Random`'s `rand-int`. So code that prints, sleeps and reads the clock is testable as it stands:
 
 ```irij
 use std.time {Time}
@@ -157,8 +157,31 @@ println (check-age (-1))
 println (check-age 200)
 ```
 
-<!-- engine-limit: abort-from-called-fn — fixed by irij fix/effect-gaps: delete this note; aborting works from called fns and forks -->
-> In the current release, a clause that doesn't resume works when the operation is performed directly inside the `with` block, as above. Performed from inside a function called from the block, it is reported as an error instead. For failures deep in a call chain, raise with `error` and catch with `on-failure` or `try`.
+It doesn't matter how deep the operation is performed. Here `reject` happens two calls down from the `with`, and the whole rest of the work is still abandoned:
+
+```irij
+effect Validate
+  reject :: Str -> ()
+
+handler first-problem :: Validate
+  reject reason => Err reason
+
+fn check-name ::: Validate
+  => name
+  if (name == "")
+    reject "empty name"
+  name
+
+fn check-user ::: Validate
+  => user
+  check-name user.name
+  if (user.age < 0)
+    reject "negative age"
+  user
+
+println (with first-problem do (Ok (check-user {name= "Ada" age= 36})))
+println (with first-problem do (Ok (check-user {name= "" age= -1})))
+```
 
 ## on-failure
 

@@ -42,6 +42,8 @@ fn timed :: Str Int ::: Console Time
 println (timed "a quick job" >= 0)
 ```
 
+`timed` reads the real clock, so its result changes from run to run — all this program can promise is `>= 0`. The next lesson shows how to hand it a clock that always gives the same answer.
+
 ## Effects travel up the call chain
 
 If `f` calls `g`, then `f` does everything `g` does. So a caller must declare every effect of the functions it calls:

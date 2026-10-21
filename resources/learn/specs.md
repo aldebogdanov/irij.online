@@ -79,7 +79,20 @@ println ada.name
 println (User "Grace" 85)
 ```
 
-<!-- engine-limit: record-update-on-spec — `{...ada age= 37}` on a product-spec value failed; fixed by irij fix/pattern-gaps (stays a User, re-checked): show it above -->
+Updating a field with `{...record field= value}` keeps the spec — the result is still a `User`, and its fields are checked again. Adding a field the spec doesn't declare gives a plain map instead:
+
+```irij
+spec User
+  name :: Str
+  age :: Int
+
+ada := User "Ada" 36
+older := {...ada age= 37}
+println older
+println (type-of older)
+println (type-of {...ada nick= "A"})
+```
+
 The fields are checked when the value is built, so a bad record never gets made:
 
 ```irij fails

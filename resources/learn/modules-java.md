@@ -52,7 +52,10 @@ with random.default-random
   println (roll 6)
 with always-max
   println (roll 6)
+  println (random-int 6)
 ```
+
+The builtins `random-int` and `random-float` perform these same operations, so `always-max` fixes them too.
 
 ## Writing a module
 
