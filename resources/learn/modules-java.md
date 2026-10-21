@@ -31,7 +31,7 @@ A handful of standard modules worth knowing — those marked † need a real mac
 | `std.text` | `words`, `lines`, `chars`, padding, … |
 | `std.collection` | `zip`, `group-by`, `frequencies`, `sort-by`, `distinct`, `flatten`, … |
 | `std.func` | `flip`, `compose`, `juxt`, `complement`, … |
-| `std.random`, `std.time`, `std.console` | the `Random`, `Time` and `Console` effects, with default and mockable handlers |
+| `std.console`, `std.random`, `std.time` | the `Console`, `Random` and `Time` effects that `println`, `random-int`, `now-ms` and the like perform, with default and mockable handlers |
 | `std.test` | `test`, `assert-eq`, … for `irij test` |
 | `std.fs`† `std.http`† `std.serve`† `std.db`† | files, HTTP client and server, SQLite |
 
@@ -55,7 +55,7 @@ with always-max
   println (random-int 6)
 ```
 
-The builtins `random-int` and `random-float` perform these same operations, so `always-max` fixes them too — just as `now-ms` answers to a `Time` handler.
+The builtins `random-int` and `random-float` perform these same operations, so `always-max` fixes them too.
 
 ## Writing a module
 

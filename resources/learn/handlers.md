@@ -158,17 +158,7 @@ handler frozen-clock :: Time
 println (with frozen-clock do (timed "a quick job"))
 ```
 
-`time-now` takes no argument, so its clause has no pattern: `time-now => …`. A handler may also leave a clause out — `frozen-clock` has none for `time-sleep`, so `sleep` still really waits. A `Console` handler can reshape output; its clause calls the real `println`, since a clause isn't handled by its own handler:
-
-```irij
-handler shouting :: Console ::: Console
-  println msg =>
-    println (upper-case (to-str msg))
-    resume ()
-
-with shouting
-  println "hello from inside"
-```
+`time-now` takes no argument, so its clause has no pattern: `time-now => …`. The next lesson uses this to test code that prints, sleeps and reads the clock without doing any of it.
 
 That's the whole trick behind testing effectful code in Irij: production gets a handler that talks to the real world, tests get one that answers from a script. The next lesson builds on it.
 

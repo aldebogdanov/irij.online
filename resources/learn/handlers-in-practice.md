@@ -72,6 +72,38 @@ println outbox.sent
 
 In production you'd write a `smtp` handler for `Mailer` with `::: JVM` or a network effect in its row, and `remind-overdue` wouldn't change by a single character.
 
+The built-in effects work the same way, as the last lesson's frozen clock showed — `random-int` too, which performs `Random`'s `rand-int`. So code that prints, sleeps and reads the clock is testable as it stands:
+
+```irij
+use std.time {Time}
+
+fn report ::: Console Time
+  =>
+  start := now-ms ()
+  sleep 60000
+  println "took ${now-ms () - start} ms"
+
+handler screen :: Console
+  lines :! #[]
+  println msg =>
+    lines <- lines ++ #[msg]
+    resume ()
+
+handler fast-clock :: Time
+  clock :! 0
+  time-now => resume clock
+  time-sleep ms =>
+    clock <- clock + ms
+    resume ()
+
+with screen
+  with fast-clock
+    report ()
+println screen.lines
+```
+
+The minute-long `sleep` returns at once and moves the fake clock forward, and the line `report` prints lands in `screen.lines` rather than on the screen. A handler only needs clauses for the operations it changes: `screen` has no `read-line` clause, so `read-line` still reads real input under it.
+
 ## Handling several effects: >>
 
 `h1 >> h2` composes two handlers into one, so a single `with` covers both effects:
