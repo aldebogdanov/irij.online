@@ -28,6 +28,14 @@ println (0.1 + 0.2)
 println (0.1 + 0.2 == 0.3)
 ```
 
+A literal with a fraction, an exponent or both is a `Float`. The exponent is `e` (or `E`), an optional sign and digits:
+
+```irij
+println 1.5e3
+println 2.5e-3
+type-of 1e6
+```
+
 Mixing kinds takes the wider one: `Int` with `Rational` gives a `Rational`, anything with a `Float` gives a `Float`.
 
 ### Division
