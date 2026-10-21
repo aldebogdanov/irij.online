@@ -773,6 +773,7 @@ fn home-roadmap
                          phase-row "done" "v0.9.314" "The language server no longer reports a qualified effect (`::: proc.Proc`) as an unbound row variable; Emacs expand/shrink asks the server under lsp-mode too" ++
                          phase-row "done" "v0.9.330" "`irij test` and `irij quint doctor` in colour, and `irij test -v` lists every test; Quint 0.33.0 is the tested version, its traces identical to 0.32.0's; in Emacs, puni's and expand-region's keys expand along the syntax tree" ++
                          phase-row "done" "v0.9.332" "`std.resource`: a `Resource` effect (`resource-read`, `resource-exists?`) gives a program read-only access to its own `resources/` — the jar's bundle after `irij build`, else the directory beside it — without granting the disk" ++
+                         phase-row "done" "v0.9.348" "Hardening: hashes and signatures refuse a Str with no UTF-8 encoding (a lone surrogate signed as `?`); Datastar keys every payload line; the server decodes the path per segment and refuses `%2F`, dot segments and invalid escapes, `req.query` is raw (`req.params` decoded); `route-prefix` matches whole segments; `random-int` & co. answer from a `Random` handler; strict `parse-int`/`parse-float`; `percent-encode`" ++
                          phase-row "planned" "Future" "Linear types (capability + channel safety); channels (send/recv/select); choreographic programming; refinement types; content-addressed code; multi-resume effects (search/nondet/probabilistic); GraalVM native image"))
 
 ;; ── Full home page ───────────────────────────────────────────────
@@ -1290,10 +1291,7 @@ fn empty-message
 
 fn handle-seed-list ::: Serve
   => request
-  params := split request.query "&"
-    |> @ (part -> split part "=")
-    |> list.fold (acc pair -> assoc acc (head pair) (last pair)) {}
-  q := get "q" params
+  q := get "q" request.params
   seeds := perform-db-query q
   cards := seeds |> @ seed-card-el
   dom := (if (empty? cards)
