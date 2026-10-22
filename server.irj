@@ -56,6 +56,8 @@ seeds-storage-dir := workdir ++ "/seeds"
 ;; Ensure data dirs exist
 use std.fs :as fs
 use std.fs {FileIO}
+use std.jvm :as jvm
+use seed-readme :as seed-readme
 
 fn init-registry-dirs ::: Console FileIO
   => _
@@ -222,7 +224,42 @@ fn open-registry-db ::: Db Console
   =>
   conn := db-open seeds-db-path
   init-registry-db conn
+  backfill-readmes conn
   conn
+
+fn tarball-path :: Str Str Str
+  (name version -> seeds-storage-dir ++ "/" ++ name ++ "/" ++ version ++ ".tar.gz")
+
+;; The README in a stored tarball, "" when it has none. Reading the
+;; .tar.gz is Java (gzip); this is the one place the site needs it.
+fn stored-readme :: Str Str Str
+  => name version
+  with jvm.unsafe-jvm do (seed-readme.tarball-readme (tarball-path name version))
+
+;; Versions published before the registry read READMEs out of the
+;; tarball carry ''. Fill them from their stored tarballs at boot; a
+;; version with no README stays '' and costs one more look next boot.
+fn backfill-readmes ::: Db Console
+  => conn
+  rows := db-query conn "SELECT id, package_name, version FROM versions WHERE readme IS NULL OR readme = ''" #[]
+  filled := backfill-rows conn rows 0
+  if (filled > 0)
+    println ("Backfilled " ++ to-str filled ++ " seed README(s)")
+  else
+    ()
+
+fn backfill-rows :: _ Vec Int Int ::: Db
+  => conn rows filled
+  if (empty? rows)
+    filled
+  else
+    row := head rows
+    text := stored-readme row.package_name row.version
+    if (text == "")
+      backfill-rows conn (tail rows) filled
+    else
+      db-exec conn "UPDATE versions SET readme = ? WHERE id = ?" #[text row.id]
+      backfill-rows conn (tail rows) (filled + 1)
 
 registry-db :! ()
 if (run-mode == "site")
@@ -373,6 +410,15 @@ fn css
     (rule ".seed-desc" "color:var(--muted);font-size:.92rem;margin:0")
     (rule ".seed-meta" "display:flex;gap:1.5rem;margin-top:.5rem;font-size:.8rem;color:var(--muted)")
     (rule ".seed-detail-header" "margin-bottom:2rem")
+    (rule ".seed-readme" "margin:2rem 0")
+    (rule ".seed-readme-raw" "white-space:pre-wrap;overflow-wrap:anywhere;font-size:.85rem")
+    (rule ".seed-readme-body" "border:1px solid var(--border);border-radius:8px;padding:1rem 1.5rem;overflow-wrap:anywhere")
+    (rule ".seed-readme-body h1" "font-size:1.6rem;margin-top:0")
+    (rule ".seed-readme-body h2" "font-size:1.3rem")
+    (rule ".seed-readme-body h3" "font-size:1.1rem")
+    (rule ".seed-readme-body pre" "overflow-x:auto;padding:.75rem;border-radius:6px;background:var(--code-bg)")
+    (rule ".seed-readme-body table" "display:block;overflow-x:auto")
+    (rule ".seed-readme-body img" "max-width:100%")
     (rule ".seed-detail-header h2" "display:flex;align-items:baseline;gap:.75rem")
     (rule ".seed-install" "background:var(--code-bg);border:1px solid var(--border);border-radius:.5rem;padding:1rem;font-family:JetBrains Mono,monospace;font-size:.88rem;margin:1rem 0")
     (rule ".version-list" "margin-top:1.5rem")
@@ -1088,7 +1134,9 @@ fn seed-detail-page
       latest := head versions
       version-items := versions |> @ render-version-item
       pkg-info := head pkg
-      serve.html ~ layout name "/seeds" #[
+      readme-text := str-or-empty latest.readme
+      scripts := if (readme-text == "") #[] else readme-scripts
+      serve.html ~ layout-head-extra name scripts "/seeds" #[
         (div {class= "seed-detail-header"} #[
           (h2 {} #[(span {} #[name]) (span {class= "seed-version"} #[latest.version])])
           (p {class= "sub"} #[latest.description])
@@ -1099,9 +1147,29 @@ fn seed-detail-page
         (h3 {} #["Install"])
         (div {class= "seed-install"} #[(raw (name ++ " = \"" ++ latest.version ++ "\""))])
         (p {style= "font-size:.85rem;color:var(--muted)"} #["Add to [seeds] in irij.toml"])
+        (readme-section readme-text)
         (div {class= "version-list"} #[
           (h3 {} #["Versions"])
           (div {} version-items)])]
+
+;; The latest version's README, from its tarball (see seed-readme.irj).
+;; Served as escaped text in a <pre>; /seed-readme.js renders it as
+;; sanitized Markdown when scripts run.
+readme-scripts := #[
+  (el "script" {src= "https://cdn.jsdelivr.net/npm/marked@12.0.2/marked.min.js" integrity= "sha384-/TQbtLCAerC3jgaim+N78RZSDYV7ryeoBCVqTuzRrFec2akfBkHS7ACQ3PQhvMVi" crossorigin= "anonymous" defer= "defer"} #[])
+  (el "script" {src= "https://cdn.jsdelivr.net/npm/dompurify@3.1.6/dist/purify.min.js" integrity= "sha384-+VfUPEb0PdtChMwmBcBmykRMDd+v6D/oFmB3rZM/puCMDYcIvF968OimRh4KQY9a" crossorigin= "anonymous" defer= "defer"} #[])
+  (el "script" {src= "/seed-readme.js" defer= "defer"} #[])
+]
+
+fn readme-section
+  => text
+  if (text == "")
+    (span {} #[])
+  else
+    (div {class= "seed-readme"} #[
+      (h3 {} #["README"])
+      (pre-el {id= "seed-readme-src" class= "seed-readme-raw"} #[text])
+      (div {id= "seed-readme" class= "seed-readme-body" hidden= "hidden"} #[])])
 
 fn render-version-item
   => v
@@ -1248,13 +1316,14 @@ fn do-publish ::: FileIO Serve Db
   tarball-dir := seeds-storage-dir ++ "/" ++ name
   with fs.default-fs
     fs-mkdir tarball-dir
-  tarball-path := tarball-dir ++ "/" ++ version ++ ".tar.gz"
-  multipart-save request "tarball" tarball-path
+  saved-path := tarball-path name version
+  multipart-save request "tarball" saved-path
   version-exists := lookup-version name version
   if (empty? version-exists == false)
     serve.json-response (json-encode ({error= (name ++ " " ++ version ++ " already published")}))
   else
-    publish-write-rows name version author description license caller-id links
+    readme := stored-readme name version
+    publish-write-rows name version author description license caller-id links readme
 
 fn lookup-version ::: Db
   => name version
@@ -1264,10 +1333,10 @@ fn lookup-version ::: Db
 ;; Links are latest-publish-wins, same as license: irij.toml is the
 ;; source of truth, so removing a link there removes it here.
 fn publish-write-rows ::: Db FileIO Serve
-  => name version author description license caller-id links
+  => name version author description license caller-id links readme
   with db.default-db
     db-exec registry-db "INSERT INTO packages (name, owner_id, license, website, repo, docs, updated) VALUES (?, ?, ?, ?, ?, ?, datetime('now')) ON CONFLICT(name) DO UPDATE SET license = excluded.license, website = excluded.website, repo = excluded.repo, docs = excluded.docs, updated = datetime('now')" #[name caller-id license links.website links.repo links.docs]
-    db-exec registry-db "INSERT INTO versions (package_name, version, description, readme, author) VALUES (?, ?, ?, ?, ?)" #[name version description "" author]
+    db-exec registry-db "INSERT INTO versions (package_name, version, description, readme, author) VALUES (?, ?, ?, ?, ?)" #[name version description readme author]
     serve.json-response (json-encode ({ok= true name= name version= version}))
 
 ;; GET /api/seeds — list/search seeds
@@ -1332,10 +1401,10 @@ fn handle-seed-detail
 
 fn handle-seed-download ::: FileIO
   => name version
-  tarball-path := seeds-storage-dir ++ "/" ++ name ++ "/" ++ version ++ ".tar.gz"
-  exists := with fs.default-fs do (fs-exists? tarball-path)
+  path := tarball-path name version
+  exists := with fs.default-fs do (fs-exists? path)
   if exists
-    {status= 200 file= tarball-path headers= (assoc (assoc {} "content-type" "application/gzip") "content-disposition" ("attachment; filename=" ++ name ++ "-" ++ version ++ ".tar.gz"))}
+    {status= 200 file= path headers= (assoc (assoc {} "content-type" "application/gzip") "content-disposition" ("attachment; filename=" ++ name ++ "-" ++ version ++ ".tar.gz"))}
   else
     {status= 404 body= (json-encode ({error= "Tarball not found"})) headers= (assoc {} "content-type" "application/json")}
 

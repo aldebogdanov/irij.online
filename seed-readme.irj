@@ -1,0 +1,120 @@
+mod seed-readme
+
+;; The README of a published seed, read from its tarball.
+;;
+;; `irij publish` bundles the project's README.md (or README) into the
+;; .tar.gz it uploads, but sends no README in its metadata — so the
+;; registry reads it from the tarball, which works for every CLI
+;; release, and backfills older versions from their stored tarballs.
+;;
+;; The archive is walked one 512-byte tar header at a time: file
+;; bodies are skipped, never read, so a large or hostile tarball costs
+;; no memory. Only a README at the archive's root counts; README.md
+;; wins over README. macOS tar's AppleDouble entries (`._README.md`)
+;; are other names and are passed over.
+
+;; What is stored and served: a longer README is cut here.
+pub max-readme-bytes := 262144
+
+;; Headers walked before giving up — far more files than any seed has.
+max-entries := 10000
+
+;; "README.md" → 2, "README" → 1, anything else → 0. A leading "./"
+;; is dropped; case doesn't matter.
+pub fn readme-rank :: Str Int
+  => raw-name
+  name := lower-case (if (starts-with? raw-name "./") (substring raw-name 2 (length raw-name)) else raw-name)
+  cond
+    name == "readme.md" => 2
+    name == "readme" => 1
+    _ => 0
+
+;; A tar header field: the text up to its first NUL.
+fn field :: Str Int Int Str
+  => header from len
+  raw := substring header from (from + len)
+  cut := index-of raw (from-char-code 0)
+  if (cut < 0) raw else (substring raw 0 cut)
+
+;; A tar size field is octal digits, space- or NUL-padded. -1 when it
+;; isn't (base-256 sizes past 8 GiB, garbage).
+fn octal :: Str Int
+  => s
+  digits := trim s
+  if (digits == "")
+    0
+  else
+    octal-from digits 0 0
+
+fn octal-from :: Str Int Int Int
+  => s i acc
+  if (i >= length s)
+    acc
+  else
+    d := char-code (substring s i (i + 1)) - 48
+    if (d < 0 || d > 7)
+      -1
+    else
+      octal-from s (i + 1) (acc * 8 + d)
+
+fn padded :: Int Int
+  (size -> ((size + 511) / 512) * 512)
+
+;; The body of the current entry, decoded as UTF-8, at most
+;; max-readme-bytes of it; the stream is left at the next header.
+fn read-body :: _ Int Str ::: JVM
+  => gz size
+  keep := min size max-readme-bytes
+  bytes := gz#readNBytes keep
+  gz#skipNBytes (padded size - keep)
+  text := java.lang.String/new bytes "UTF-8"
+  if (size > keep) (text ++ "\n\n…") else text
+
+;; Walk the headers; `best` is #(rank text) of the best README so far.
+fn walk :: _ Int Tuple Str ::: JVM
+  => gz n best
+  header-bytes := gz#readNBytes 512
+  #(best-rank best-text) := best
+  if (n >= max-entries || length header-bytes < 512)
+    best-text
+  else
+    header := java.lang.String/new header-bytes "ISO-8859-1"
+    name := field header 0 100
+    size := octal (field header 124 12)
+    kind := substring header 156 157
+    regular := kind == "0" || kind == (from-char-code 0)
+    rank := readme-rank name
+    cond
+      name == "" || size < 0 => best-text
+      regular && rank > best-rank =>
+        walk gz (n + 1) #(rank (read-body gz size))
+      _ =>
+        gz#skipNBytes (padded size)
+        walk gz (n + 1) best
+
+;; The README in the .tar.gz at `path`, or "" when it has none or the
+;; file isn't a readable tar.gz.
+pub fn tarball-readme :: Str Str ::: JVM
+  => path
+  outcome := try (-> open-and-walk path)
+  match outcome
+    Ok text => text
+    Err _ => ""
+
+fn open-and-walk :: Str Str ::: JVM
+  => path
+  file := java.io.FileInputStream/new path
+  outcome := try (-> gunzip-walk file)
+  file#close ()
+  match outcome
+    Ok text => text
+    Err e => error e
+
+fn gunzip-walk :: _ Str ::: JVM
+  => file
+  gz := java.util.zip.GZIPInputStream/new file
+  outcome := try (-> walk gz 0 #(0 ""))
+  gz#close ()
+  match outcome
+    Ok text => text
+    Err e => error e
