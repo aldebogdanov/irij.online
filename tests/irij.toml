@@ -1,0 +1,3 @@
+# Lets tests reach the site's own modules (seed-readme.irj) at the repo root.
+[seeds]
+site = { path = ".." }

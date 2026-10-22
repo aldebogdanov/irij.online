@@ -53,6 +53,11 @@ jobs:
           fi
           echo "Smoke test passed: HTTP 200 with HTML response"
 
+      - name: Site tests
+        # tests/test-*.irj — seed-readme.irj reads READMEs out of real
+        # tarballs built with the runner's tar.
+        run: java -jar irij.jar test
+
       - name: Course lessons run as written
         # Every ```irij block of resources/learn/*.md runs (or fails, when
         # marked so) and every exercise's solution passes its checks while

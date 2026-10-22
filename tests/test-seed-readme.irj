@@ -1,0 +1,101 @@
+use std.test {assert-eq assert-true test summarize}
+use std.proc :as proc
+use seed-readme :as sr
+
+;; Real tarballs, built with the system's tar the way `irij publish`
+;; builds them (`tar czf out.tar.gz -C root files…`).
+
+fn sh :: Str Str ::: proc.Proc
+  => script
+  r := proc.proc-run {cmd= #["sh" "-c" script]}
+  if (r.exit /= 0)
+    error ~ "sh failed: " ++ r.stderr
+  else
+    trim r.stdout
+
+work := with proc.default-proc do (sh "mktemp -d")
+
+;; Make `name`.tar.gz from a shell script run in a fresh directory
+;; `name`/, archiving `files` (a shell word list) from it.
+fn tarball :: Str Str Str Str ::: proc.Proc
+  => name setup files
+  dir := work ++ "/" ++ name
+  archive := work ++ "/" ++ name ++ ".tar.gz"
+  sh ("mkdir -p '" ++ dir ++ "' && cd '" ++ dir ++ "' && " ++ setup ++ " && COPYFILE_DISABLE=1 tar czf '" ++ archive ++ "' " ++ files)
+  archive
+
+fn readme-of :: Str Str Str Str ::: proc.Proc JVM
+  (name setup files -> sr.tarball-readme (tarball name setup files))
+
+fn run-root-readme-md ::: proc.Proc JVM
+  =>
+  text := readme-of "md" "mkdir src && printf '# Seed\\n\\nÜnïcode ✓\\n' > README.md && echo 'mod a' > src/a.irj && echo x > irij.toml" "irij.toml src/a.irj README.md"
+  assert-eq "# Seed\n\nÜnïcode ✓\n" text
+
+fn run-plain-readme ::: proc.Proc JVM
+  =>
+  assert-eq "plain\n" (readme-of "plain" "echo plain > README" "README")
+
+fn run-md-wins ::: proc.Proc JVM
+  =>
+  assert-eq "markdown\n" (readme-of "both" "echo plain > README && echo markdown > README.md" "README README.md")
+  assert-eq "markdown\n" (readme-of "both2" "echo plain > README && echo markdown > README.md" "README.md README")
+
+fn run-case-and-dot-slash ::: proc.Proc JVM
+  =>
+  assert-eq "lower\n" (readme-of "lower" "echo lower > readme.md" "readme.md")
+  assert-eq "dotted\n" (readme-of "dotted" "echo dotted > README.md" "./README.md")
+
+fn run-only-root-counts ::: proc.Proc JVM
+  =>
+  assert-eq "" (readme-of "nested" "mkdir docs && echo nested > docs/README.md && echo x > irij.toml" "irij.toml docs/README.md")
+  assert-eq "" (readme-of "none" "echo x > irij.toml" "irij.toml")
+
+fn run-after-a-big-file ::: proc.Proc JVM
+  =>
+  text := readme-of "big" "head -c 3000000 /dev/zero > big.irj && echo after > README.md" "big.irj README.md"
+  assert-eq "after\n" text
+
+fn run-long-readme-is-cut ::: proc.Proc JVM
+  =>
+  text := readme-of "long" "head -c 300000 /dev/zero | tr '\\0' 'a' > README.md" "README.md"
+  assert-eq (sr.max-readme-bytes + 3) (length text)
+  assert-true (ends-with? text "\n\n…")
+
+fn run-not-a-tarball ::: proc.Proc JVM
+  =>
+  junk := work ++ "/junk.tar.gz"
+  sh ("echo 'not gzip at all' > '" ++ junk ++ "'")
+  assert-eq "" (sr.tarball-readme junk)
+  plain := work ++ "/plain.tar"
+  sh ("cd '" ++ work ++ "/md' && tar cf '" ++ plain ++ "' README.md")
+  assert-eq "" (sr.tarball-readme plain)
+  assert-eq "" (sr.tarball-readme (work ++ "/missing.tar.gz"))
+
+fn run-rank :: () ()
+  =>
+  assert-eq 2 (sr.readme-rank "README.md")
+  assert-eq 2 (sr.readme-rank "./Readme.MD")
+  assert-eq 1 (sr.readme-rank "README")
+  assert-eq 0 (sr.readme-rank "._README.md")
+  assert-eq 0 (sr.readme-rank "docs/README.md")
+  assert-eq 0 (sr.readme-rank "README.txt")
+
+fn in-env :: Fn Fn
+  (f -> (-> with proc.default-proc do (f ())))
+
+results := #[
+  (test "README.md at the root, UTF-8 intact"   (in-env run-root-readme-md))
+  (test "a bare README"                         (in-env run-plain-readme))
+  (test "README.md wins over README"            (in-env run-md-wins))
+  (test "any case, a leading ./"                (in-env run-case-and-dot-slash))
+  (test "only the root's README counts"         (in-env run-only-root-counts))
+  (test "found after a large file"              (in-env run-after-a-big-file))
+  (test "a long README is cut"                  (in-env run-long-readme-is-cut))
+  (test "not a tar.gz, or missing → empty"      (in-env run-not-a-tarball))
+  (test "readme-rank"                           run-rank)
+]
+
+with proc.default-proc do (sh ("rm -rf '" ++ work ++ "'"))
+
+summarize results
