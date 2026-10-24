@@ -127,7 +127,7 @@ handler quiet :: Log
 handler scripted :: Ask
   ask _ => resume "Ada"
 
-with quiet >> scripted do (signup ())
+with quiet >> scripted do (println (signup ()))
 ```
 
 Nesting `with` blocks works too; `>>` just keeps it flat.

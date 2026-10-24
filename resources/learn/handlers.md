@@ -136,14 +136,22 @@ handler frozen :: Clock
   now () => resume 1700000000
   zone () => resume "UTC"
 
-with frozen do (timestamp ())
+with frozen do (println (timestamp ()))
 ```
 
 ## The built-in effects are effects too
 
-`Console` and `Time` from the last lesson work the same way. `println`, `print` and `read-line` perform `Console`'s operations of the same names; `now-ms` and `sleep` perform `Time`'s `time-now` and `time-sleep` (declared in `std.time`). A handler with a clause for the operation answers it; with none, the builtin does the real thing.
+`Console` and `Time` from the last lesson work the same way. Each of their builtins is a small wrapper that **performs an operation**, and the operation has its own name, declared in a standard module. A handler catches the operation, so its clause uses the operation's name:
 
-So the `timed` function from the last lesson, which reads the real clock, gets the same answer every time under a frozen one:
+| You call | It performs | A handler's clause |
+|---|---|---|
+| `println x`, `print x`, `read-line ()` | `Console`'s `println`, `print`, `read-line` (`std.console`) | `println msg => …` |
+| `now-ms ()` | `Time`'s `time-now` (`std.time`) | `time-now => …` |
+| `sleep ms` | `Time`'s `time-sleep` | `time-sleep ms => …` |
+
+A handler with a clause for the operation answers it; with none, the builtin does the real thing — reads the system clock, really waits, writes to the screen.
+
+So the `timed` function from the last lesson, which reads the clock twice with `now-ms ()`, gets the same answer every time under a handler whose `time-now` clause always gives the same instant:
 
 ```irij
 use std.time {Time}
@@ -155,12 +163,12 @@ fn timed :: Str Int ::: Console Time
   now-ms () - start
 
 handler frozen-clock :: Time
-  time-now => resume 1700000000000
+  time-now => resume 1700000000000   ;; answers every now-ms ()
 
 println (with frozen-clock do (timed "a quick job"))
 ```
 
-`time-now` takes no argument, so its clause has no pattern: `time-now => …`. The next lesson uses this to test code that prints, sleeps and reads the clock without doing any of it.
+Both `now-ms ()` calls perform `time-now`, both get `1700000000000`, so the difference is `0`. `time-now` is declared without an argument (`time-now :: Int`), so its clause has no pattern before `=>`. `frozen-clock` has no `time-sleep` clause, so `sleep` would still really wait. The next lesson uses this to test code that prints, sleeps and reads the clock without doing any of it.
 
 That's the whole trick behind testing effectful code in Irij: production gets a handler that talks to the real world, tests get one that answers from a script. The next lesson builds on it.
 
@@ -197,11 +205,11 @@ handler test-config :: Config
 
 ```irij check
 course-check "the banner" (-> with test-config do (banner ())) "Irij v0.9"
-course-check "an unknown key" (-> with test-config do (setting "colour")) "?"
+course-check "an unknown key" (-> with test-config do (setting "colour" ++ "!")) "?!"
 ```
 
 ```hint
-One clause, `setting key => …`, that resumes with a value chosen by `key`. A small helper `fn` with match arms (`"name" => "Irij"` …) keeps the clause short: `setting key => resume (lookup key)`.
+One clause, `setting key => …`, that resumes with a value chosen by `key`. A small helper `fn` with match arms (`"name" => "Irij"` …) keeps the clause short: `setting key => resume (lookup key)`. Without `resume`, the clause's value would end the whole `with` block instead of answering `setting` — the next lesson uses that on purpose.
 ```
 :::
 
