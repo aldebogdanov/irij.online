@@ -13,11 +13,47 @@
 ;; ones after it. Names start with `course-` to stay clear of the
 ;; learner's own.
 
+;; Expected and got are shown the way source writes them — every Str in
+;; quotes, at any depth — so `#["tea: 3"]` and `#["tea:" 3]` can't print
+;; alike. (`to-str` drops the quotes inside a collection.)
 fn course-show
-  (v -> course-unwrap (to-str (Ok v)))
+  => v
+  match (type-of v)
+    "Str" => course-quote v
+    "Vector" => "#[" ++ course-show-all v ++ "]"
+    "Tuple" => "#(" ++ course-show-all (to-vec v) ++ ")"
+    "Set" => "#{" ++ course-show-all (to-vec v) ++ "}"
+    "Map" => "{" ++ join " " (keys v |> @ (k -> course-key k ++ "= " ++ course-show-in (get k v))) ++ "}"
+    "Ok" => "Ok " ++ course-show-in (course-field v)
+    "Err" => "Err " ++ course-show-in (course-field v)
+    _ => to-str v
 
-fn course-unwrap
-  (s -> substring s 3 (length s))
+fn course-show-all
+  (xs -> join " " (xs |> @ course-show-in))
+
+;; A variant with a field nests in parentheses: #[(Ok 1) (Err "e")].
+fn course-show-in
+  => v
+  t := type-of v
+  if (t == "Ok" || t == "Err")
+    "(" ++ course-show v ++ ")"
+  else
+    course-show v
+
+fn course-field
+  (Ok x) => x
+  (Err x) => x
+
+fn course-quote
+  => s
+  esc := replace (replace (replace (replace s "\\" "\\\\") "\"" "\\\"") "\n" "\\n") "\t" "\\t"
+  "\"" ++ esc ++ "\""
+
+;; A key that is no field name (`Content-Type`, `a b`) is quoted.
+fn course-key
+  => k
+  plain := split k "" |> /? (c -> ! (contains? (split "abcdefghijklmnopqrstuvwxyz0123456789-_?!:" "") c))
+  if (empty? plain && k /= "") k else (course-quote k)
 
 fn course-check ::: Console
   => label thunk want
