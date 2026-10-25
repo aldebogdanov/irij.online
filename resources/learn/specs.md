@@ -16,6 +16,16 @@ println r
 type-of r
 ```
 
+The fields' specs are checked when a value is built, so a bad value never gets made:
+
+```irij fails
+spec Shape
+  Circle Float
+  Rect Float Float
+
+Circle "big"
+```
+
 Each variant name is a constructor: a function that builds the value. To use one, match on its constructor pattern — it binds the fields in order:
 
 ```irij
@@ -49,7 +59,7 @@ println (colour Spades)
 println (Hearts == Hearts)
 ```
 
-A spec can take **parameters**, written in lowercase after its name. `Ok` and `Err` are built in this way (the next-but-one lesson uses them); here is a home-made "maybe":
+A spec can take **parameters**, written in lowercase after its name. The builtin `Result a e` is one — its variants are `Ok a` and `Err e`, which the next-but-one lesson uses; here is a home-made "maybe":
 
 ```irij
 spec Maybe a
@@ -144,7 +154,45 @@ The building blocks for annotations:
 | `Vec`, `Map`, `Set`, `Tuple`, `Fn` | any vector, map, … |
 | `#[Int]` | a vector whose every element is an `Int` |
 | `Shape`, `User`, … | your own specs |
+| `(Maybe Int)` | a parametric spec applied: a `Maybe` whose `Just` holds an `Int` |
+| `Circle`, `(Just Int)` | one variant only |
+| `Result`, `(Result Int Str)` | `Ok` or `Err` — applied, `Ok` holds an `Int` and `Err` a `Str` |
 | `_` | anything — "not decided yet" |
+
+A parametric spec on its own leaves its parameter open; applied, it checks it:
+
+```irij
+spec Maybe a
+  Just a
+  Nothing
+
+fn first-even :: #[Int] (Maybe Int)
+  #[] => Nothing
+  #[x ...rest] => if (x % 2 == 0) (Just x) else (first-even rest)
+
+println (first-even #[1 3 4 5])
+println (first-even #[1 3 5])
+```
+
+```irij fails
+spec Maybe a
+  Just a
+  Nothing
+
+fn wrong :: Int (Maybe Int)
+  (n -> Just (to-str n))
+
+wrong 4
+```
+
+A name in a spec must be declared somewhere — a typo is an error before anything runs, never a spec that quietly accepts everything:
+
+```irij fails
+fn shout :: Strr Str
+  (s -> upper-case s)
+
+shout "hi"
+```
 
 A record literal is accepted wherever a product spec is expected, as long as it has exactly the right fields:
 
@@ -173,6 +221,7 @@ fn send-to :: Email Str
 
 println (send-to (Email "ada@example.org"))
 println (try (-> send-to "ada@example.org"))
+println (try (-> Email 42))
 ```
 
 (`try` turns an error into a value instead of stopping the program — more on it in lesson 10.)

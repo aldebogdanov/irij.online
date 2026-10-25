@@ -47,7 +47,7 @@ One arm per variant for `coin-value`. For `paid`, map `coin-value` over the coin
 **Step 2 — the machine.** Dropping an item and writing to the screen are things the machine *does*, so they're operations of an effect. `buy` uses them, and stays testable: the checks run it under a handler that records what came out and what the screen said, instead of driving real hardware.
 
 :::exercise vending Buy something
-Write `buy ::: Machine`. It takes an item (a map with `name` and `price`) and a vector of coins.
+Write `buy :: Map #[Coin] (Result Int Int) ::: Machine`. It takes an item (a map with `name` and `price`) and a vector of coins.
 
 - If the coins cover the price: `dispense` the item's name, `display` `"change: N"`, and return `Ok N`, where N is the change.
 - Otherwise: `display` `"insert N more"` and return `Err N`, where N is what's missing. Nothing is dispensed.
@@ -70,7 +70,7 @@ effect Machine
   dispense :: Str -> ()
   display :: Str -> ()
 
-fn buy ::: Machine
+fn buy :: Map #[Coin] (Result Int Int) ::: Machine
   => item coins
   Err 0
 ```
@@ -93,7 +93,7 @@ effect Machine
   dispense :: Str -> ()
   display :: Str -> ()
 
-fn buy ::: Machine
+fn buy :: Map #[Coin] (Result Int Int) ::: Machine
   => item coins
   total := paid coins
   if (total >= item.price)
@@ -132,7 +132,7 @@ Start with `total := paid coins`, then a block `if (total >= item.price)` whose 
 ```
 :::
 
-Look at what you have: the rules (`coin-value`, `paid`) are pure and trivially testable; the behaviour (`buy`) is tested without a single real side effect; and the signature `fn buy ::: Machine` tells any reader exactly what it can touch. A production handler for `Machine` — talking to a serial port through `::: JVM` — slots in without changing `buy` at all.
+Look at what you have: the rules (`coin-value`, `paid`) are pure and trivially testable; the behaviour (`buy`) is tested without a single real side effect; and the signature `fn buy :: Map #[Coin] (Result Int Int) ::: Machine` tells any reader what it takes, what it answers — change on success, the shortfall on failure — and exactly what it can touch. A production handler for `Machine` — talking to a serial port through a cap (lesson 15) — slots in without changing `buy` at all.
 
 ## Running Irij on your machine
 
