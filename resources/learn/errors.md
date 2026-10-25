@@ -47,10 +47,10 @@ println (show-user 42)
 
 ## Ok and Err as return values
 
-Raising is for the unexpected. When failure is a normal outcome — invalid input, say — return `Ok` or `Err` yourself and let the caller `match`. Nothing is raised, and the possibility of failure is visible in the result:
+Raising is for the unexpected. When failure is a normal outcome — invalid input, say — return `Ok` or `Err` yourself and let the caller `match`. Nothing is raised, and the possibility of failure is visible in the result — and in the signature, through the builtin spec `Result`: `(Result Int Str)` reads "an `Ok` holding an `Int`, or an `Err` holding a `Str`".
 
 ```irij
-fn parse-port
+fn parse-port :: Str (Result Int Str)
   => text
   match (try (-> parse-int text))
     Err _ => Err "not a number"
