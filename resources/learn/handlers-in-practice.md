@@ -70,7 +70,7 @@ println count
 println outbox.sent
 ```
 
-In production you'd write a `smtp` handler for `Mailer` with `::: JVM` or a network effect in its row, and `remind-overdue` wouldn't change by a single character.
+In production you'd write an `smtp` handler for `Mailer` that reaches the network through a cap (lesson 15) — `handler smtp :: Mailer ::: Mailer` — and `remind-overdue` wouldn't change by a single character.
 
 The built-in effects work the same way, as the last lesson's frozen clock showed — `random-int` too, which performs `Random`'s `rand-int`. So code that prints, sleeps and reads the clock is testable as it stands:
 

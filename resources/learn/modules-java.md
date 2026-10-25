@@ -132,7 +132,45 @@ fn hypotenuse ::: JVM
 hypotenuse 3.0 4.0
 ```
 
-The idiom is to keep Java calls at the edges — inside handlers of your own effects — so the rest of the program stays pure and testable.
+## Java behind a cap
+
+`::: JVM` means "may do anything", so it shouldn't spread through a program. Put the Java behind an effect of your own instead. A `cap` binds a Java class to that effect, and a call through the cap — allowed only in the clauses of a handler for that effect — performs *that effect*, not `JVM`:
+
+```irij
+effect Clock
+  utc-now :: () -> Str
+
+cap instant :: Clock = "java.time.Instant"
+cap text :: Clock = "java.lang.String"
+
+handler system-clock :: Clock ::: Clock
+  utc-now () => resume (text.valueOf (instant.now ()))
+
+handler fixed-clock :: Clock
+  utc-now () => resume "2026-01-01T00:00:00Z"
+
+fn stamp :: Str Str ::: Clock
+  (msg -> "[" ++ utc-now () ++ "] " ++ msg)
+
+fn run-real :: Str ::: Clock
+  =>
+  with system-clock do (stamp "real")
+
+println (with fixed-clock do (stamp "test"))
+println (run-real ())
+```
+
+`system-clock` reaches the real clock through its caps, so its row is `::: Clock`, and `run-real`, which installs it, declares `::: Clock` — the resource it touches, never `JVM`. Tests install `fixed-clock`. The standard library is built this way: `default-db :: Db ::: Db`, `default-fs :: FileIO ::: FileIO`, so a function that opens a database says `::: Db`.
+
+A project can also decide which modules may reach Java at all. In `irij.toml`:
+
+```toml
+[trust]
+caps = ["acme.clock"]   # may declare a cap
+jvm = ["legacy.zip"]    # may write Class/member and #method by hand
+```
+
+With it, the compiler refuses Java in any other module — the seeds you depend on included — and `irij audit` lists every place the program touches Java. A dependency that says it only needs `Clock` then can't reach the network either.
 
 :::exercise title-case Title Case
 Using `std.text` (imported as `text`), write `title-case`, which capitalises the first letter of every word: `title-case "the effect of effects"` is `"The Effect Of Effects"`. Words are separated by single spaces.

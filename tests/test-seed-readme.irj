@@ -81,7 +81,7 @@ fn run-rank :: () ()
   assert-eq 0 (sr.readme-rank "docs/README.md")
   assert-eq 0 (sr.readme-rank "README.txt")
 
-fn in-env :: Fn Fn
+fn in-env :: Fn Fn ::: proc.Proc
   (f -> (-> with proc.default-proc do (f ())))
 
 results := #[
