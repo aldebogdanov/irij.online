@@ -58,7 +58,7 @@ use std.fs :as fs
 use std.fs {FileIO}
 use seed-readme :as seed-readme
 
-fn init-registry-dirs ::: Console FileIO JVM
+fn init-registry-dirs ::: Console FileIO
   => _
   with fs.default-fs
     fs-mkdir seeds-db-dir
@@ -81,7 +81,7 @@ fn reserved-usernames :: Vec
   ])
 
 ;; Initialize DB schema
-fn init-registry-db ::: Console JVM Random
+fn init-registry-db ::: Console Db Random
   => conn
   with db.default-db
     ;; ── 8.2c: users + tokens FIRST (other tables FK-reference them) ─
@@ -219,7 +219,7 @@ fn drop-legacy-owner-column-if-present ::: Db Console
 ;; their own `with default-db` frame as before. We use a `mut`
 ;; placeholder so the connection lives at top level after the
 ;; bootstrap block exits.
-fn open-registry-db ::: Db Console JVM Random
+fn open-registry-db ::: Db Console Random JVM
   =>
   conn := db-open seeds-db-path
   init-registry-db conn
@@ -880,12 +880,12 @@ use std.session :as session
 use std.session {Session}
 
 ;; POST /api/session — create a new persistent sandbox session
-fn create-session-id ::: Session JVM
+fn create-session-id ::: Session
   =>
   with session.default-session
     session-create ()
 
-fn handle-session-create ::: Session JVM
+fn handle-session-create ::: Session
   (_ -> serve.json-response (json-encode ({id= (create-session-id ())})))
 
 ;; POST /api/session/eval — eval code in a persistent session
@@ -899,13 +899,13 @@ fn session-eval-body ::: Session Time
   elapsed := (time-now ()) - t0
   serve.json-response (json-encode ({value= (get "value" result) stdout= (get "stdout" result) error= (get "error" result) ok= (get "ok" result) elapsed= elapsed}))
 
-fn handle-session-eval-helper ::: Session JVM Time
+fn handle-session-eval-helper ::: Session Time
   => request
   with time.default-time
     with session.default-session
       session-eval-body request
 
-fn handle-session-eval ::: Session JVM Time
+fn handle-session-eval ::: Session Time
   (request -> handle-session-eval-helper request)
 
 ;; POST /api/session/destroy — destroy a session
@@ -915,7 +915,7 @@ fn session-destroy-body ::: Session
   session-destroy (get "id" data)
   serve.json-response (json-encode ({ok= true}))
 
-fn handle-session-destroy ::: Session JVM
+fn handle-session-destroy ::: Session
   => request
   with session.default-session
     session-destroy-body request
@@ -930,7 +930,7 @@ fn session-stream-body ::: Serve Session
   session-subscribe id sse
   sse
 
-fn handle-session-stream ::: Serve Session JVM
+fn handle-session-stream ::: Serve Session
   => request
   with session.default-session
     session-stream-body request
@@ -1119,7 +1119,7 @@ fn seeds-page
       (el "input" (assoc {type= "text" placeholder= "Search seeds..." id= "seed-search"} "data-on:keyup" "@get('api/seeds?q=' + evt.target.value)") #[])])
     (div {id= "seed-list" data-init= "@get('api/seeds')"} #[])]
 
-fn seed-detail-page ::: JVM
+fn seed-detail-page ::: Db
   => request
   segments := serve.path-segments request.path "/seeds"
   name := head segments
@@ -1208,29 +1208,29 @@ fn seed-links-el
 ;; Requires Authorization: Bearer <token> header. Token resolves to a
 ;; user; ownership of the package gets set/checked on that user.
 
-fn user-by-bearer ::: Db JVM
+fn user-by-bearer ::: Db
   => hdr
   if (hdr == () || hdr == "")
     {}
   else
     user-by-bearer-nonempty hdr
 
-fn user-by-bearer-nonempty ::: Db JVM
+fn user-by-bearer-nonempty ::: Db
   => hdr
   if (starts-with? hdr "Bearer ")
     bearer-resolve hdr
   else
     {}
 
-fn bearer-resolve ::: Db JVM
+fn bearer-resolve ::: Db
   => hdr
   user-by-token-hash (sha256-hex (substring hdr 7 (length hdr)))
 
-fn user-by-token-hash ::: Db JVM
+fn user-by-token-hash ::: Db
   => hashed
   rows-first-or-empty (lookup-token-rows hashed)
 
-fn lookup-token-rows ::: Db JVM
+fn lookup-token-rows ::: Db
   => hashed
   with db.default-db
     db-query registry-db "SELECT u.id, u.username FROM users u JOIN api_tokens t ON t.user_id = u.id WHERE t.token_hash = ?" #[hashed]
@@ -1297,7 +1297,7 @@ fn publish-check-owner ::: Db FileIO Serve JVM
   else
     do-publish request name version (get "username" caller) description license (get "id" caller) links
 
-fn lookup-pkg-owner ::: Db JVM
+fn lookup-pkg-owner ::: Db
   => name
   with db.default-db
     db-query registry-db "SELECT owner_id FROM packages WHERE name = ?" #[name]
@@ -1323,14 +1323,14 @@ fn do-publish ::: FileIO Serve Db JVM
     readme := stored-readme name version
     publish-write-rows name version author description license caller-id links readme
 
-fn lookup-version ::: Db JVM
+fn lookup-version ::: Db
   => name version
   with db.default-db
     db-query registry-db "SELECT id FROM versions WHERE package_name = ? AND version = ?" #[name version]
 
 ;; Links are latest-publish-wins, same as license: irij.toml is the
 ;; source of truth, so removing a link there removes it here.
-fn publish-write-rows ::: Db FileIO Serve JVM
+fn publish-write-rows ::: Db FileIO Serve
   => name version author description license caller-id links readme
   with db.default-db
     db-exec registry-db "INSERT INTO packages (name, owner_id, license, website, repo, docs, updated) VALUES (?, ?, ?, ?, ?, ?, datetime('now')) ON CONFLICT(name) DO UPDATE SET license = excluded.license, website = excluded.website, repo = excluded.repo, docs = excluded.docs, updated = datetime('now')" #[name caller-id license links.website links.repo links.docs]
@@ -1346,7 +1346,7 @@ fn compose-query-data
     pattern := "%" ++ q ++ "%"
     #["SELECT p.name, u.username AS owner, p.license, v.version, v.description, v.published FROM packages p JOIN users u ON u.id = p.owner_id JOIN versions v ON v.package_name = p.name AND v.id = (SELECT MAX(id) FROM versions WHERE package_name = p.name) WHERE p.name LIKE ? OR v.description LIKE ? OR v.author LIKE ? ORDER BY CASE WHEN p.name = ? THEN 0 WHEN p.name LIKE ? THEN 1 ELSE 2 END, p.updated DESC" #[pattern pattern pattern q (q ++ "%")]]
 
-fn perform-db-query ::: JVM
+fn perform-db-query ::: Db
   => q
   with db.default-db
     #[sql params] := compose-query-data q
@@ -1361,7 +1361,7 @@ fn empty-message
     #[(p {} #["No seeds for your query."]) (p {} #["Need to add one? Run: "
                                                    (code {} #["irij publish"])])]
 
-fn handle-seed-list ::: Serve JVM
+fn handle-seed-list ::: Serve Db
   => request
   q := get "q" request.params
   seeds := perform-db-query q
@@ -1375,7 +1375,7 @@ fn handle-seed-list ::: Serve JVM
 ;; GET /api/seeds/* — route by segment count:
 ;;   /api/seeds/:name              → detail
 ;;   /api/seeds/:name/:version/download → download tarball
-fn handle-seed-route ::: FileIO Serve JVM
+fn handle-seed-route ::: FileIO Serve Db
   => request
   segments := serve.path-segments request.path "/api/seeds"
   count := length segments
@@ -1387,7 +1387,7 @@ fn handle-seed-route ::: FileIO Serve JVM
     else
       {status= 404 body= "Not found" headers= {}}
 
-fn handle-seed-detail ::: JVM
+fn handle-seed-detail ::: Db
   => name
   with db.default-db
     pkg := db-query registry-db "SELECT p.name, u.username AS owner, p.license, p.website, p.repo, p.docs, p.created FROM packages p JOIN users u ON u.id = p.owner_id WHERE p.name = ?" #[name]
@@ -1397,7 +1397,7 @@ fn handle-seed-detail ::: JVM
       versions := db-query registry-db "SELECT id, version, description, readme, author, published FROM versions WHERE package_name = ? ORDER BY id DESC" #[name]
       serve.json-response (json-encode ({package= (head pkg) versions= versions}))
 
-fn handle-seed-download ::: FileIO JVM
+fn handle-seed-download ::: FileIO
   => name version
   path := tarball-path name version
   exists := with fs.default-fs do (fs-exists? path)
@@ -1509,14 +1509,14 @@ fn parse-form-body :: _ Map
   else
     list.fold add-form-pair {} (split body "&")
 
-fn find-user-by-session ::: Db JVM
+fn find-user-by-session ::: Db
   => conn token
   if (token == () || token == "")
     {}
   else
     lookup-user-by-session-hash conn (sha256-hex token)
 
-fn lookup-user-by-session-hash ::: Db JVM
+fn lookup-user-by-session-hash ::: Db
   => conn hashed
   with db.default-db
     rows := db-query conn "SELECT u.id, u.username, u.email FROM users u JOIN web_sessions s ON s.user_id = u.id WHERE s.token_hash = ? AND s.expires > datetime('now')" #[hashed]
@@ -1529,7 +1529,7 @@ fn rows-first-or-empty
   else
     head rows
 
-fn current-user ::: Db JVM
+fn current-user ::: Db
   => request
   cookies := parse-cookies (get "cookie" request.headers)
   find-user-by-session registry-db (get "irij_session" cookies)
@@ -1575,7 +1575,7 @@ fn pick-or-empty :: _ Str
   else
     raw
 
-fn signup-write ::: Db random.Random FileIO Serve JVM
+fn signup-write ::: Db random.Random FileIO Serve
   => username email password
   with db.default-db
     with random.default-random
@@ -1589,20 +1589,20 @@ fn signup-write ::: Db random.Random FileIO Serve JVM
        headers= {location= "/"
                  set-cookie= ("irij_session=" ++ token ++ "; HttpOnly; SameSite=Lax; Path=/; Max-Age=2592000")}}
 
-fn user-exists? ::: Db JVM
+fn user-exists? ::: Db
   => username
   with db.default-db
     rows := db-query registry-db "SELECT id FROM users WHERE username = ?" #[username]
     empty? rows == false
 
-fn signup-check-uniq ::: Db random.Random FileIO Serve JVM
+fn signup-check-uniq ::: Db random.Random FileIO Serve
   => username email password
   if (user-exists? username)
     signup-page-with-err "That username is taken."
   else
     signup-write username email password
 
-fn signup-check-pw ::: Db random.Random FileIO Serve JVM
+fn signup-check-pw ::: Db random.Random FileIO Serve
   => username email password
   if ((length password) < 8)
     signup-page-with-err "Password must be at least 8 characters."
@@ -1626,12 +1626,12 @@ fn login-page
   => request
   login-page-with-err ""
 
-fn lookup-user-row ::: Db JVM
+fn lookup-user-row ::: Db
   => username
   with db.default-db
     db-query registry-db "SELECT id, pw_hash FROM users WHERE username = ?" #[username]
 
-fn login-issue-session ::: Db random.Random FileIO Serve JVM
+fn login-issue-session ::: Db random.Random FileIO Serve
   => user-id
   with db.default-db
     with random.default-random
@@ -1641,7 +1641,7 @@ fn login-issue-session ::: Db random.Random FileIO Serve JVM
        headers= {location= "/"
                  set-cookie= ("irij_session=" ++ token ++ "; HttpOnly; SameSite=Lax; Path=/; Max-Age=2592000")}}
 
-fn login-verify ::: Db random.Random FileIO Serve JVM
+fn login-verify ::: Db random.Random FileIO Serve
   => row password
   stored := get "pw_hash" row
   if (stored == ())
@@ -1649,21 +1649,21 @@ fn login-verify ::: Db random.Random FileIO Serve JVM
   else
     login-verify-hash stored (get "id" row) password
 
-fn login-verify-hash ::: Db random.Random FileIO Serve JVM
+fn login-verify-hash ::: Db random.Random FileIO Serve
   => stored user-id password
   if (auth.verify-password stored password)
     login-issue-session user-id
   else
     login-page-with-err "Invalid credentials."
 
-fn login-with-rows ::: Db random.Random FileIO Serve JVM
+fn login-with-rows ::: Db random.Random FileIO Serve
   => rows password
   if (empty? rows)
     login-page-with-err "Invalid credentials."
   else
     login-verify (head rows) password
 
-fn handle-login ::: Db random.Random FileIO Serve JVM
+fn handle-login ::: Db random.Random FileIO Serve
   => request
   form := parse-form-body request.body
   username := pick-or-empty (get "username" form)
@@ -1673,7 +1673,7 @@ fn handle-login ::: Db random.Random FileIO Serve JVM
   else
     login-with-rows (lookup-user-row username) password
 
-fn delete-session-by-token ::: Db JVM
+fn delete-session-by-token ::: Db
   => token
   if (token == () || token == "")
     ()
@@ -1682,7 +1682,7 @@ fn delete-session-by-token ::: Db JVM
       hashed := sha256-hex token
       db-exec registry-db "DELETE FROM web_sessions WHERE token_hash = ?" #[hashed]
 
-fn handle-logout ::: Db FileIO Serve JVM
+fn handle-logout ::: Db FileIO Serve
   => request
   cookies := parse-cookies (get "cookie" request.headers)
   token := get "irij_session" cookies
@@ -1697,12 +1697,12 @@ fn handle-logout ::: Db FileIO Serve JVM
 fn redirect-login :: Map
   (-> {status= 302 body= "" headers= {location= "/login"}})
 
-fn user-packages ::: Db JVM
+fn user-packages ::: Db
   => user-id
   with db.default-db
     db-query registry-db "SELECT name, license FROM packages WHERE owner_id = ? ORDER BY updated DESC" #[user-id]
 
-fn user-tokens ::: Db JVM
+fn user-tokens ::: Db
   => user-id
   with db.default-db
     db-query registry-db "SELECT id, label, created, last_used FROM api_tokens WHERE user_id = ? ORDER BY id DESC" #[user-id]
@@ -1760,13 +1760,13 @@ fn dashboard-body
       (el "form" {action= "/logout" method= "POST" class= "logout-form"} #[
         (el "button" {type= "submit" class= "logout-btn" style= "margin-right:2.5rem"} #["Log out"])])])]
 
-fn dashboard-for-user ::: Db FileIO Serve JVM
+fn dashboard-for-user ::: Db FileIO Serve
   => user new-token
   packages := user-packages (get "id" user)
   tokens := user-tokens (get "id" user)
   serve.html ~ layout "Dashboard" "/dashboard" (dashboard-body user packages tokens new-token)
 
-fn dashboard-page ::: Db FileIO Serve JVM
+fn dashboard-page ::: Db FileIO Serve
   => request
   user := current-user request
   if (empty? user)
@@ -1776,7 +1776,7 @@ fn dashboard-page ::: Db FileIO Serve JVM
 
 ;; ── Token CRUD ───────────────────────────────────────────────────
 
-fn token-create-write ::: Db random.Random FileIO Serve JVM
+fn token-create-write ::: Db random.Random FileIO Serve
   => user-id label
   with db.default-db
     with random.default-random
@@ -1785,7 +1785,7 @@ fn token-create-write ::: Db random.Random FileIO Serve JVM
       db-exec registry-db "INSERT INTO api_tokens (user_id, token_hash, label) VALUES (?, ?, ?)" #[user-id hashed label]
       {status= 302 body= "" headers= {location= ("/dashboard?token=" ++ token)}}
 
-fn handle-token-create ::: Db random.Random FileIO Serve JVM
+fn handle-token-create ::: Db random.Random FileIO Serve
   => request
   user := current-user request
   if (empty? user)
@@ -1793,7 +1793,7 @@ fn handle-token-create ::: Db random.Random FileIO Serve JVM
   else
     token-create-resolve user (parse-form-body request.body)
 
-fn token-create-resolve ::: Db random.Random FileIO Serve JVM
+fn token-create-resolve ::: Db random.Random FileIO Serve
   => user form
   label-raw := get "label" form
   label := pick-or-empty label-raw
@@ -1806,7 +1806,7 @@ fn default-label :: Str Str
   else
     raw
 
-fn handle-token-delete ::: Db FileIO Serve JVM
+fn handle-token-delete ::: Db FileIO Serve
   => request
   user := current-user request
   if (empty? user)
@@ -1814,7 +1814,7 @@ fn handle-token-delete ::: Db FileIO Serve JVM
   else
     token-delete-do user (parse-form-body request.body)
 
-fn token-delete-do ::: Db FileIO Serve JVM
+fn token-delete-do ::: Db FileIO Serve
   => user form
   id-raw := get "id" form
   if (id-raw == () || id-raw == "")
@@ -1822,14 +1822,14 @@ fn token-delete-do ::: Db FileIO Serve JVM
   else
     token-delete-write (get "id" user) (convert.to-int id-raw)
 
-fn token-delete-write ::: Db FileIO Serve JVM
+fn token-delete-write ::: Db FileIO Serve
   => user-id token-id
   with db.default-db
     db-exec registry-db "DELETE FROM api_tokens WHERE id = ? AND user_id = ?" #[token-id user-id]
     {status= 302 body= "" headers= {location= "/dashboard"}}
 
 
-fn handle-signup ::: Db random.Random FileIO Serve JVM
+fn handle-signup ::: Db random.Random FileIO Serve
   => request
   form := parse-form-body request.body
   username := pick-or-empty (get "username" form)
