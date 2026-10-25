@@ -56,7 +56,6 @@ seeds-storage-dir := workdir ++ "/seeds"
 ;; Ensure data dirs exist
 use std.fs :as fs
 use std.fs {FileIO}
-use std.jvm :as jvm
 use seed-readme :as seed-readme
 
 fn init-registry-dirs ::: Console FileIO JVM
@@ -232,14 +231,13 @@ fn tarball-path :: Str Str Str
 
 ;; The README in a stored tarball, "" when it has none. Reading the
 ;; .tar.gz is Java (gzip); this is the one place the site needs it.
-fn stored-readme :: Str Str Str
-  => name version
-  with jvm.unsafe-jvm do (seed-readme.tarball-readme (tarball-path name version))
+fn stored-readme :: Str Str Str ::: JVM
+  (name version -> seed-readme.tarball-readme (tarball-path name version))
 
 ;; Versions published before the registry read READMEs out of the
 ;; tarball carry ''. Fill them from their stored tarballs at boot; a
 ;; version with no README stays '' and costs one more look next boot.
-fn backfill-readmes ::: Db Console
+fn backfill-readmes ::: Db Console JVM
   => conn
   rows := db-query conn "SELECT id, package_name, version FROM versions WHERE readme IS NULL OR readme = ''" #[]
   filled := backfill-rows conn rows 0
@@ -248,7 +246,7 @@ fn backfill-readmes ::: Db Console
   else
     ()
 
-fn backfill-rows :: _ Vec Int Int ::: Db
+fn backfill-rows :: _ Vec Int Int ::: Db JVM
   => conn rows filled
   if (empty? rows)
     filled
