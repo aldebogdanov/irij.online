@@ -119,6 +119,27 @@ println (with silent do (checkout 42))
 
 `checkout` stays pure of `Console`: whether logging prints, or goes nowhere, is decided by the handler you pick.
 
+The handler's row travels with it: a `with` does what its handler's clauses do. So a function that installs `to-console` needs `::: Console` itself — the lines above get away without one only because top-level code may use every effect. A function declared pure can't print by installing a handler that prints:
+
+```irij fails
+effect Log
+  log :: Str -> ()
+
+handler to-console :: Log ::: Console
+  log msg =>
+    println ("[log] " ++ msg)
+    resume ()
+
+fn price :: Int Int
+  => cents
+  with to-console do (log "pricing")
+  cents + cents / 4
+
+price 100
+```
+
+Add `::: Console` to `price` and it compiles. Install `silent` instead and `price` stays pure: `silent` has no row, so installing it does nothing to the world.
+
 ## Several operations, and operations without arguments
 
 An effect can declare many operations; a handler must give each one a clause. An operation that takes nothing is declared `op :: () -> T`, its clause is `op () => …`, and it is performed as `op ()`:

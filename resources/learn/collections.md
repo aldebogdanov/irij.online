@@ -22,6 +22,15 @@ println (nth 1 langs)
 println (get 9 langs)
 ```
 
+Printed on its own, a string is just its text; inside a collection it keeps its quotes, so `#["a b" "c"]` can't be mistaken for three words. `inspect` gives that quoted form for any value:
+
+```irij
+println "a b"
+println #["a b" "c"]
+println {name= "Ada" tags= #["math" ""]}
+println (inspect "a b")
+```
+
 `nth` fails on an index that isn't there; `get` returns `()` instead. `head` of an empty vector is an error too — check with `empty?` first.
 
 Adding and combining always returns a new vector:

@@ -28,7 +28,7 @@
 
     var builtins = new Set([
       'pi', 'e',
-      'print', 'println', 'to-str', 'dbg', 'type-of', 'error', 'read-line',
+      'print', 'println', 'to-str', 'inspect', 'dbg', 'type-of', 'error', 'read-line',
       'abs', 'min', 'max', 'quo', 'rem', 'sqrt', 'floor', 'ceil', 'round',
       'sin', 'cos', 'tan', 'log', 'exp', 'pow',
       'parse-int', 'parse-float', 'random-int', 'random-float',

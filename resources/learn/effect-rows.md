@@ -62,7 +62,7 @@ process 21
 
 The error names the call that needs `Console` and where. The fix is to add `::: Console` to `process` — or to handle the effect, which is what the next lesson is about.
 
-This is what makes a signature trustworthy. `fn price-with-tax :: Int Int` *cannot* print, read the clock or touch the network, no matter how deep its helpers go. You can test it with plain values, call it from anywhere, and run it in parallel without a second thought.
+This is what makes a signature trustworthy. `fn price-with-tax :: Int Int` *cannot* print, read the clock or touch the network, no matter how deep its helpers go — not even by installing a handler that does (the next lesson shows why). You can test it with plain values, call it from anywhere, and run it in parallel without a second thought.
 
 ## Higher-order functions and row variables
 
