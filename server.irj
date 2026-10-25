@@ -56,7 +56,6 @@ seeds-storage-dir := workdir ++ "/seeds"
 ;; Ensure data dirs exist
 use std.fs :as fs
 use std.fs {FileIO}
-use std.jvm :as jvm
 use seed-readme :as seed-readme
 
 fn init-registry-dirs ::: Console FileIO
@@ -82,7 +81,7 @@ fn reserved-usernames :: Vec
   ])
 
 ;; Initialize DB schema
-fn init-registry-db ::: Console
+fn init-registry-db ::: Console Db Random
   => conn
   with db.default-db
     ;; ── 8.2c: users + tokens FIRST (other tables FK-reference them) ─
@@ -149,7 +148,7 @@ fn add-link-column-if-missing ::: Db Console
 ;; IGNORE deduplicates so subsequent boots are no-ops. Done via
 ;; tail recursion since the single-expression lambda body in
 ;; `fold` can't carry both the side-effect and the accumulator.
-fn seed-reserved-users ::: Db Console
+fn seed-reserved-users ::: Db Console Random
   => conn
   insert-reserved-users conn (reserved-usernames ())
   seed-admin-password conn
@@ -162,14 +161,14 @@ fn seed-reserved-users ::: Db Console
 ;; the row keeps NULL pw_hash and stays un-loginable (e.g. local dev
 ;; without the secret). Idempotent: rotating the env var rotates the
 ;; password on next boot.
-fn seed-admin-password ::: Db Console
+fn seed-admin-password ::: Db Console Random
   => conn
   if (admin-password == "")
     ()
   else
     set-admin-password conn admin-password
 
-fn set-admin-password ::: Db Console
+fn set-admin-password ::: Db Console Random
   => conn pw
   with random.default-random
     salt := auth.new-salt ()
@@ -220,7 +219,7 @@ fn drop-legacy-owner-column-if-present ::: Db Console
 ;; their own `with default-db` frame as before. We use a `mut`
 ;; placeholder so the connection lives at top level after the
 ;; bootstrap block exits.
-fn open-registry-db ::: Db Console
+fn open-registry-db ::: Db Console Random JVM
   =>
   conn := db-open seeds-db-path
   init-registry-db conn
@@ -232,14 +231,13 @@ fn tarball-path :: Str Str Str
 
 ;; The README in a stored tarball, "" when it has none. Reading the
 ;; .tar.gz is Java (gzip); this is the one place the site needs it.
-fn stored-readme :: Str Str Str
-  => name version
-  with jvm.unsafe-jvm do (seed-readme.tarball-readme (tarball-path name version))
+fn stored-readme :: Str Str Str ::: JVM
+  (name version -> seed-readme.tarball-readme (tarball-path name version))
 
 ;; Versions published before the registry read READMEs out of the
 ;; tarball carry ''. Fill them from their stored tarballs at boot; a
 ;; version with no README stays '' and costs one more look next boot.
-fn backfill-readmes ::: Db Console
+fn backfill-readmes ::: Db Console JVM
   => conn
   rows := db-query conn "SELECT id, package_name, version FROM versions WHERE readme IS NULL OR readme = ''" #[]
   filled := backfill-rows conn rows 0
@@ -248,7 +246,7 @@ fn backfill-readmes ::: Db Console
   else
     ()
 
-fn backfill-rows :: _ Vec Int Int ::: Db
+fn backfill-rows :: _ Vec Int Int ::: Db JVM
   => conn rows filled
   if (empty? rows)
     filled
@@ -901,13 +899,13 @@ fn session-eval-body ::: Session Time
   elapsed := (time-now ()) - t0
   serve.json-response (json-encode ({value= (get "value" result) stdout= (get "stdout" result) error= (get "error" result) ok= (get "ok" result) elapsed= elapsed}))
 
-fn handle-session-eval-helper ::: Session
+fn handle-session-eval-helper ::: Session Time
   => request
   with time.default-time
     with session.default-session
       session-eval-body request
 
-fn handle-session-eval ::: Session
+fn handle-session-eval ::: Session Time
   (request -> handle-session-eval-helper request)
 
 ;; POST /api/session/destroy — destroy a session
@@ -1121,7 +1119,7 @@ fn seeds-page
       (el "input" (assoc {type= "text" placeholder= "Search seeds..." id= "seed-search"} "data-on:keyup" "@get('api/seeds?q=' + evt.target.value)") #[])])
     (div {id= "seed-list" data-init= "@get('api/seeds')"} #[])]
 
-fn seed-detail-page
+fn seed-detail-page ::: Db
   => request
   segments := serve.path-segments request.path "/seeds"
   name := head segments
@@ -1242,7 +1240,7 @@ fn unauthorized-publish :: Map
        body= "Unauthorized — missing or invalid Bearer token. Create one at /dashboard."
        headers= (assoc {} "content-type" "application/json")})
 
-fn handle-seed-publish ::: Db FileIO Serve
+fn handle-seed-publish ::: Db FileIO Serve JVM
   => request
   caller := user-by-bearer (get "authorization" request.headers)
   if (empty? caller)
@@ -1270,7 +1268,7 @@ fn bad-link? :: _ Bool
   else
     ((starts-with? v "https://") || (starts-with? v "http://")) == false
 
-fn publish-validate ::: Db FileIO Serve
+fn publish-validate ::: Db FileIO Serve JVM
   => request caller
   meta-json := multipart-field request "metadata"
   meta := json-parse meta-json
@@ -1289,7 +1287,7 @@ fn publish-validate ::: Db FileIO Serve
     else
       publish-check-owner request caller name version description license links
 
-fn publish-check-owner ::: Db FileIO Serve
+fn publish-check-owner ::: Db FileIO Serve JVM
   => request caller name version description license links
   owner-rows := lookup-pkg-owner name
   if (owner-not-mine? owner-rows (get "id" caller))
@@ -1311,7 +1309,7 @@ fn owner-not-mine? :: _ _ Bool
   else
     (get "owner_id" (head owner-rows)) /= caller-id
 
-fn do-publish ::: FileIO Serve Db
+fn do-publish ::: FileIO Serve Db JVM
   => request name version author description license caller-id links
   tarball-dir := seeds-storage-dir ++ "/" ++ name
   with fs.default-fs
@@ -1348,7 +1346,7 @@ fn compose-query-data
     pattern := "%" ++ q ++ "%"
     #["SELECT p.name, u.username AS owner, p.license, v.version, v.description, v.published FROM packages p JOIN users u ON u.id = p.owner_id JOIN versions v ON v.package_name = p.name AND v.id = (SELECT MAX(id) FROM versions WHERE package_name = p.name) WHERE p.name LIKE ? OR v.description LIKE ? OR v.author LIKE ? ORDER BY CASE WHEN p.name = ? THEN 0 WHEN p.name LIKE ? THEN 1 ELSE 2 END, p.updated DESC" #[pattern pattern pattern q (q ++ "%")]]
 
-fn perform-db-query
+fn perform-db-query ::: Db
   => q
   with db.default-db
     #[sql params] := compose-query-data q
@@ -1363,7 +1361,7 @@ fn empty-message
     #[(p {} #["No seeds for your query."]) (p {} #["Need to add one? Run: "
                                                    (code {} #["irij publish"])])]
 
-fn handle-seed-list ::: Serve
+fn handle-seed-list ::: Serve Db
   => request
   q := get "q" request.params
   seeds := perform-db-query q
@@ -1377,7 +1375,7 @@ fn handle-seed-list ::: Serve
 ;; GET /api/seeds/* — route by segment count:
 ;;   /api/seeds/:name              → detail
 ;;   /api/seeds/:name/:version/download → download tarball
-fn handle-seed-route ::: FileIO Serve
+fn handle-seed-route ::: FileIO Serve Db
   => request
   segments := serve.path-segments request.path "/api/seeds"
   count := length segments
@@ -1389,7 +1387,7 @@ fn handle-seed-route ::: FileIO Serve
     else
       {status= 404 body= "Not found" headers= {}}
 
-fn handle-seed-detail
+fn handle-seed-detail ::: Db
   => name
   with db.default-db
     pkg := db-query registry-db "SELECT p.name, u.username AS owner, p.license, p.website, p.repo, p.docs, p.created FROM packages p JOIN users u ON u.id = p.owner_id WHERE p.name = ?" #[name]
