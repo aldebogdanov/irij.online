@@ -1,0 +1,82 @@
+mod seed-deps
+
+;; The Irij seeds a seed depends on: its irij.toml [seeds]. A project
+;; that uses the seed fetches them too, so the seed page shows them
+;; next to its Java libraries (seed-jvm.irj).
+;;
+;; `irij publish` sends no [seeds] in its metadata, but bundles
+;; irij.toml in the tarball — so, like the README, the registry reads
+;; them from there (seed-readme.tarball-toml), which works for every
+;; CLI release and backfills older versions.
+;;
+;; Stored per version as a JSON array of dependencies, sorted by name:
+;;   {name= "vrata" version= "0.2.1"}                           registry
+;;   {name= "foo" git= "https://…/foo.git" ref= "v1"}            git
+;; NULL means not looked yet; "[]" none.
+
+;; Characters a seed name, version or git ref may hold here; an entry
+;; with anything else is left out.
+plain-chars := to-set (split "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789._+-" "")
+
+pub fn plain? :: _ Bool
+  => s
+  (type-of s) == "Str" && s /= "" && (fold (acc c -> acc && (contains? plain-chars c)) true (split s ""))
+
+url-bad-chars := to-set #[" " "\"" "'" "<" ">" "\\"]
+
+;; A git URL is linked from the page, so only a web URL with no spaces
+;; or quotes counts.
+pub fn git-url? :: _ Bool
+  => s
+  web := (type-of s) == "Str" && ((starts-with? s "https://") || (starts-with? s "http://"))
+  web && (fold (acc c -> acc && (contains? url-bad-chars c) == false) true (split s ""))
+
+;; One [seeds] entry as a stored dependency, () when it's none we show
+;; (a path seed — publish refuses those — or anything malformed).
+pub fn dep :: Str _ _
+  => name value
+  cond
+    (plain? name) == false => ()
+    (type-of value) == "Str" =>
+      if (plain? value) {name= name version= value} else ()
+    (type-of value) == "Map" => table-dep name value
+    _ => ()
+
+;; A table entry: git with tag or commit (the CLI's rule), or version.
+fn table-dep :: Str Map _
+  => name t
+  git := get "git" t
+  ref := if (get "tag" t /= ()) (get "tag" t) else (get "commit" t)
+  version := get "version" t
+  cond
+    git /= () => if ((git-url? git) && (plain? ref)) {name= name git= git ref= ref} else ()
+    get "path" t /= () => ()
+    _ => if (plain? version) {name= name version= version} else ()
+
+;; irij.toml text → its [seeds] as dependencies, sorted by name. None
+;; when there's no [seeds] or the text isn't TOML.
+pub fn deps-of-toml :: Str Vector ::: JVM
+  => text
+  outcome := try (-> seeds-map text)
+  match outcome
+    Ok m => (sort (keys m)) |> @ (k -> dep k (get k m)) |> /? (d -> d /= ())
+    Err _ => #[]
+
+;; toml4j ships inside irij.jar (the CLI parses irij.toml with it).
+fn seeds-map :: Str Map ::: JVM
+  => text
+  parser := com.moandjiezana.toml.Toml/new ()
+  table := (parser#read text)#getTable "seeds"
+  if (table == ()) {} else (table#toMap ())
+
+;; What to store for a version whose irij.toml is `text`.
+pub fn stored-seeds :: Str Str ::: JVM
+  (text -> json-encode (deps-of-toml text))
+
+;; A stored value back as dependencies (none for NULL or '').
+pub fn deps :: _ Vector
+  => stored
+  if (stored == () || stored == "")
+    #[]
+  else
+    json-parse stored

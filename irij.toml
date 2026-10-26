@@ -7,7 +7,7 @@ name = "irij.online"
 # count (see ./scripts/release). Bump the base by hand only for a MINOR site
 # feature or a MAJOR rework; engine bumps and small fixes just ride the commit
 # count.
-version = "1.5"
+version = "1.6"
 description = "Irij language website, seeds registry and playground"
 
 [seeds]
@@ -26,9 +26,10 @@ vrata = "0.2.11"
 "org.xerial:sqlite-jdbc" = "3.53.4.0"
 
 [trust]
-# Which modules may reach Java (Irij's [trust], see `irij audit`). Only
-# seed-readme does: it reads a seed's README out of its .tar.gz with
-# java.util.zip by hand. Everything else reaches the world through std's
+# Which modules may reach Java (Irij's [trust], see `irij audit`).
+# seed-readme reads a seed's README and irij.toml out of its .tar.gz
+# with java.util.zip by hand; seed-deps parses that irij.toml with the
+# TOML parser inside irij.jar. Everything else reaches the world through std's
 # caps (Db, FileIO, Serve, Session), which are always trusted.
 caps = []
-jvm = ["seed-readme"]
+jvm = ["seed-readme", "seed-deps"]
