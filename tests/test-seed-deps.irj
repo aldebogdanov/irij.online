@@ -1,0 +1,73 @@
+use std.test {assert-eq assert-true test summarize}
+use std.proc :as proc
+use seed-readme :as sr
+use seed-deps :as sd
+
+toml := "[project]\nname = \"s\"\n\n[seeds]\nvrata = \"0.2.1\"\nfoo = { git = \"https://github.com/a/foo.git\", tag = \"v1\" }\nlocal = { path = \"../local\" }\n\n[seeds.bar]\ngit = \"https://example.com/bar.git\"\ncommit = \"abc123\"\n\n[seeds.baz]\nversion = \"1.0.3\"\n"
+
+fn run-parse ::: JVM
+  =>
+  assert-eq #[
+    {name= "bar" git= "https://example.com/bar.git" ref= "abc123"}
+    {name= "baz" version= "1.0.3"}
+    {name= "foo" git= "https://github.com/a/foo.git" ref= "v1"}
+    {name= "vrata" version= "0.2.1"}] (sd.deps-of-toml toml)
+
+fn run-none ::: JVM
+  =>
+  assert-eq #[] (sd.deps-of-toml "[project]\nname = \"s\"\n")
+  assert-eq #[] (sd.deps-of-toml "[[not toml")
+  assert-eq #[] (sd.deps-of-toml "")
+
+fn run-refused ::: JVM
+  =>
+  assert-eq #[] (sd.deps-of-toml "[seeds]\nx = { git = \"javascript:alert(1)\", tag = \"v1\" }\n")
+  assert-eq #[] (sd.deps-of-toml "[seeds]\nx = { git = \"https://a/b\\\"><img\", tag = \"v1\" }\n")
+  assert-eq #[] (sd.deps-of-toml "[seeds]\nx = { git = \"https://a/b.git\" }\n")
+  assert-eq #[] (sd.deps-of-toml "[seeds]\nx = \"1 <b>\"\n")
+  assert-eq #[] (sd.deps-of-toml "[seeds]\n\"a/b\" = \"1.0\"\n")
+
+fn run-stored ::: JVM
+  =>
+  assert-eq "[]" (sd.stored-seeds "")
+  stored := sd.stored-seeds "[seeds]\nvrata = \"0.2.1\"\n"
+  assert-eq #[{name= "vrata" version= "0.2.1"}] (sd.deps stored)
+  assert-eq #[] (sd.deps ())
+  assert-eq #[] (sd.deps "")
+
+fn sh :: Str Str ::: proc.Proc
+  => script
+  r := proc.proc-run {cmd= #["sh" "-c" script]}
+  if (r.exit /= 0)
+    error ~ "sh failed: " ++ r.stderr
+  else
+    trim r.stdout
+
+;; irij.toml out of a real tarball, as `irij publish` builds it.
+fn run-from-tarball ::: proc.Proc JVM
+  =>
+  work := sh "mktemp -d"
+  archive := work ++ "/s.tar.gz"
+  sh ("cd '" ++ work ++ "' && mkdir -p s/docs && cd s && printf '[seeds]\\nvrata = \"0.2.1\"\\n' > irij.toml && echo x > docs/irij.toml && echo 'mod a' > a.irj && COPYFILE_DISABLE=1 tar czf '" ++ archive ++ "' docs/irij.toml a.irj irij.toml")
+  text := sr.tarball-toml archive
+  sh ("rm -rf '" ++ work ++ "'")
+  assert-eq "[seeds]\nvrata = \"0.2.1\"\n" text
+  assert-eq #[{name= "vrata" version= "0.2.1"}] (sd.deps-of-toml text)
+
+fn run-toml-rank :: () ()
+  =>
+  assert-eq 1 (sr.toml-rank "irij.toml")
+  assert-eq 1 (sr.toml-rank "./irij.toml")
+  assert-eq 0 (sr.toml-rank "IRIJ.toml")
+  assert-eq 0 (sr.toml-rank "docs/irij.toml")
+
+results := #[
+  (test "[seeds]: registry, git, table forms; path left out" run-parse)
+  (test "no [seeds], or not TOML → none"                     run-none)
+  (test "unsafe or malformed entries left out"               run-refused)
+  (test "stored as JSON and read back"                       run-stored)
+  (test "irij.toml read from a tarball"                      (-> with proc.default-proc do (run-from-tarball ())))
+  (test "toml-rank"                                          run-toml-rank)
+]
+
+summarize results

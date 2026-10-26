@@ -12,6 +12,9 @@ mod seed-readme
 ;; no memory. Only a README at the archive's root counts; README.md
 ;; wins over README. macOS tar's AppleDouble entries (`._README.md`)
 ;; are other names and are passed over.
+;;
+;; The same walk finds the seed's irij.toml (tarball-toml), which
+;; seed-deps.irj reads the seed's own [seeds] from.
 
 ;; What is stored and served: a longer README is cut here.
 pub max-readme-bytes := 262144
@@ -23,11 +26,19 @@ max-entries := 10000
 ;; is dropped; case doesn't matter.
 pub fn readme-rank :: Str Int
   => raw-name
-  name := lower-case (if (starts-with? raw-name "./") (substring raw-name 2 (length raw-name)) else raw-name)
+  name := lower-case (root-name raw-name)
   cond
     name == "readme.md" => 2
     name == "readme" => 1
     _ => 0
+
+;; "irij.toml" at the root → 1, anything else → 0. Case matters, as it
+;; does to the CLI.
+pub fn toml-rank :: Str Int
+  (raw-name -> if (root-name raw-name == "irij.toml") 1 else 0)
+
+fn root-name :: Str Str
+  (raw-name -> if (starts-with? raw-name "./") (substring raw-name 2 (length raw-name)) else raw-name)
 
 ;; A tar header field: the text up to its first NUL.
 fn field :: Str Int Int Str
@@ -70,9 +81,10 @@ fn read-body :: _ Int Str ::: JVM
   text := java.lang.String/new bytes "UTF-8"
   if (size > keep) (text ++ "\n\n…") else text
 
-;; Walk the headers; `best` is #(rank text) of the best README so far.
-fn walk :: _ Int Tuple Str ::: JVM
-  => gz n best
+;; Walk the headers; `best` is #(rank text) of the best-ranked entry so
+;; far (rank-of: readme-rank or toml-rank).
+fn walk :: _ _ Int Tuple Str ::: JVM
+  => rank-of gz n best
   header-bytes := gz#readNBytes 512
   #(best-rank best-text) := best
   if (n >= max-entries || length header-bytes < 512)
@@ -83,37 +95,44 @@ fn walk :: _ Int Tuple Str ::: JVM
     size := octal (field header 124 12)
     kind := substring header 156 157
     regular := kind == "0" || kind == (from-char-code 0)
-    rank := readme-rank name
+    rank := rank-of name
     cond
       name == "" || size < 0 => best-text
       regular && rank > best-rank =>
-        walk gz (n + 1) #(rank (read-body gz size))
+        walk rank-of gz (n + 1) #(rank (read-body gz size))
       _ =>
         gz#skipNBytes (padded size)
-        walk gz (n + 1) best
+        walk rank-of gz (n + 1) best
 
 ;; The README in the .tar.gz at `path`, or "" when it has none or the
 ;; file isn't a readable tar.gz.
 pub fn tarball-readme :: Str Str ::: JVM
-  => path
-  outcome := try (-> open-and-walk path)
+  (path -> tarball-entry readme-rank path)
+
+;; The irij.toml in the .tar.gz at `path`, or "" (as tarball-readme).
+pub fn tarball-toml :: Str Str ::: JVM
+  (path -> tarball-entry toml-rank path)
+
+fn tarball-entry :: _ Str Str ::: JVM
+  => rank-of path
+  outcome := try (-> open-and-walk rank-of path)
   match outcome
     Ok text => text
     Err _ => ""
 
-fn open-and-walk :: Str Str ::: JVM
-  => path
+fn open-and-walk :: _ Str Str ::: JVM
+  => rank-of path
   file := java.io.FileInputStream/new path
-  outcome := try (-> gunzip-walk file)
+  outcome := try (-> gunzip-walk rank-of file)
   file#close ()
   match outcome
     Ok text => text
     Err e => error e
 
-fn gunzip-walk :: _ Str ::: JVM
-  => file
+fn gunzip-walk :: _ _ Str ::: JVM
+  => rank-of file
   gz := java.util.zip.GZIPInputStream/new file
-  outcome := try (-> walk gz 0 #(0 ""))
+  outcome := try (-> walk rank-of gz 0 #(0 ""))
   gz#close ()
   match outcome
     Ok text => text
