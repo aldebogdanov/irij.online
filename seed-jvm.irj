@@ -1,0 +1,56 @@
+mod seed-jvm
+
+;; The Java libraries a seed brings: irij.toml's [jvm], which `irij
+;; publish` (Irij 0.10+) sends in its metadata as `jvm`, a list of
+;; "group:artifact:version" strings. A project that uses the seed loads
+;; them, so the seed page shows them before anyone installs it.
+;;
+;; Stored per version as a JSON array string; '' for versions published
+;; by older CLIs, which never said.
+
+;; Characters a Maven group, artifact or version may hold here. The same
+;; rule the CLI applies; anything else is refused at publish, so a
+;; coordinate is safe to put in an href or text without escaping.
+coord-chars := to-set (split "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789._+-" "")
+
+fn plain-part? :: Str Bool
+  => s
+  s /= "" && (fold (acc c -> acc && (contains? coord-chars c)) true (split s ""))
+
+pub fn valid-coord? :: _ Bool
+  => c
+  if ((type-of c) /= "Str")
+    false
+  else
+    parts := split c ":"
+    (length parts) == 3 && (fold (acc p -> acc && (plain-part? p)) true parts)
+
+;; The metadata's `jvm` as the string to store: Ok '' when absent (an
+;; older CLI), Ok the JSON array, or Err why it's refused.
+pub fn stored-jvm :: _ _
+  => value
+  if (value == ())
+    Ok ""
+  else
+    if ((type-of value) /= "Vector")
+      Err "jvm must be a list of \"group:artifact:version\" strings"
+    else
+      if (fold (acc c -> acc && (valid-coord? c)) true value)
+        Ok (json-encode value)
+      else
+        Err "jvm must be a list of \"group:artifact:version\" strings"
+
+;; A stored value back as a list of coordinates (none for ''). Only
+;; stored-jvm writes these, so every element is a valid coordinate.
+pub fn coords :: _ Vector
+  => stored
+  if (stored == () || stored == "")
+    #[]
+  else
+    json-parse stored
+
+;; Maven Central's page for a coordinate.
+pub fn central-url :: Str Str
+  => coord
+  #[g a v] := split coord ":"
+  "https://central.sonatype.com/artifact/" ++ g ++ "/" ++ a ++ "/" ++ v
