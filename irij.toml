@@ -20,6 +20,11 @@ description = "Irij language website, seeds registry and playground"
 vrata = "0.2.11"
 # { git = "https://github.com/aldebogdanov/vrata.git", tag = "v0.2.1" }
 
+# Java libraries (Irij's [jvm]): the registry's SQLite driver. Irij
+# bundles no JDBC driver; std.jdbc finds this one. Pinned in irij.lock.
+[jvm]
+"org.xerial:sqlite-jdbc" = "3.53.4.0"
+
 [trust]
 # Which modules may reach Java (Irij's [trust], see `irij audit`). Only
 # seed-readme does: it reads a seed's README out of its .tar.gz with

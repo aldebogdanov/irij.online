@@ -33,7 +33,7 @@ A handful of standard modules worth knowing — those marked † need a real mac
 | `std.func` | `flip`, `compose`, `juxt`, `complement`, … |
 | `std.console`, `std.random`, `std.time` | the `Console`, `Random` and `Time` effects that `println`, `random-int`, `now-ms` and the like perform, with default and mockable handlers |
 | `std.test` | `test`, `assert-eq`, … for `irij test` |
-| `std.fs`† `std.http`† `std.serve`† `std.db`† | files, HTTP client and server, SQLite |
+| `std.fs`† `std.http`† `std.serve`† `std.jdbc`† | files, HTTP client and server, databases over JDBC |
 
 Effects come through imports too. `std.random` declares an effect `Random` with an operation `rand-int` and a real handler `default-random` — and, as you'd now expect, you can swap in your own:
 
@@ -171,6 +171,19 @@ jvm = ["legacy.zip"]    # may write Class/member and #method by hand
 ```
 
 With it, the compiler refuses Java in any other module — the seeds you depend on included — and `irij audit` lists every place the program touches Java. A dependency that says it only needs `Clock` then can't reach the network either.
+
+## Libraries from Maven
+
+The JDK is where Java starts, not where it ends. Name any library from Maven Central in `irij.toml`, at an exact version:
+
+```toml
+[jvm]
+"org.apache.commons:commons-text" = "1.12.0"
+```
+
+`irij run` fetches it with everything it depends on and writes `irij.lock`, which pins each jar by its hash — commit it, and every machine runs the same bytes. From then on its classes are as reachable as the JDK's: `cap escapes :: Markup = "org.apache.commons.text.StringEscapeUtils"`, and `irij build` puts the jars inside your app.
+
+Databases work this way. `std.jdbc` is the `Db` effect over JDBC, and the driver is a library you list: `"org.xerial:sqlite-jdbc"` for `db-open "jdbc:sqlite:app.db"`, or PostgreSQL's, MySQL's, H2's. A seed can bring libraries too, and a library runs code the moment it loads — so with a `[trust]` section, only seeds named in `jars = ["…"]` get theirs fetched at all.
 
 :::exercise title-case Title Case
 Using `std.text` (imported as `text`), write `title-case`, which capitalises the first letter of every word: `title-case "the effect of effects"` is `"The Effect Of Effects"`. Words are separated by single spaces.
