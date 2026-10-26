@@ -57,6 +57,7 @@ seeds-storage-dir := workdir ++ "/seeds"
 use std.fs :as fs
 use std.fs {FileIO}
 use seed-readme :as seed-readme
+use seed-jvm :as seed-jvm
 
 fn init-registry-dirs ::: Console FileIO
   => _
@@ -118,6 +119,8 @@ fn init-registry-db ::: Console Db Random
     add-link-column-if-missing conn "website"
     add-link-column-if-missing conn "repo"
     add-link-column-if-missing conn "docs"
+    ;; A version's [jvm] Java libraries (JSON array; '' before the CLI sent them).
+    add-version-jvm-column-if-missing conn
   println "Registry DB initialized"
 
 ;; SQLite has no "ADD COLUMN IF NOT EXISTS"; probe via PRAGMA and
@@ -143,6 +146,16 @@ fn add-link-column-if-missing ::: Db Console
     ()
   else
     db-exec conn ("ALTER TABLE packages ADD COLUMN " ++ col ++ " TEXT DEFAULT ''") #[]
+
+;; versions.jvm — what Java a seed version brings (seed-jvm.irj).
+fn add-version-jvm-column-if-missing ::: Db Console
+  => conn
+  cols := db-query conn "PRAGMA table_info(versions)" #[]
+  has-col? := list.fold (acc c -> acc || (c.name == "jvm")) false cols
+  if has-col?
+    ()
+  else
+    db-exec conn "ALTER TABLE versions ADD COLUMN jvm TEXT DEFAULT ''" #[]
 
 ;; Insert every reserved username with NULL pw_hash. INSERT OR
 ;; IGNORE deduplicates so subsequent boots are no-ops. Done via
@@ -444,6 +457,8 @@ fn css
     (rule ".seed-links" "display:flex;gap:1.25rem;margin-top:.6rem;font-size:.85rem")
     (rule ".seed-links a" "color:var(--accent);text-decoration:none")
     (rule ".seed-links a:hover" "text-decoration:underline")
+    (rule ".seed-jvm ul" "margin:.5rem 0;padding-left:1.25rem")
+    (rule ".seed-jvm a" "color:var(--accent);text-decoration:none")
     (rule ".ver-tag" "font-family:JetBrains Mono,monospace;font-weight:600;color:var(--accent);min-width:80px")
     (rule ".ver-date" "font-size:.8rem;color:var(--muted)")
     (rule ".ver-author" "font-size:.8rem;color:var(--muted)")
@@ -1132,7 +1147,7 @@ fn seed-detail-page ::: Db
     if (empty? pkg)
       serve.html ~ layout "Not Found" "/seeds" #[(h2 {} #["Seed Not Found"]) (p {} #[("No seed named '" ++ name ++ "' exists.")])]
     else
-      versions := db-query registry-db "SELECT version, description, readme, author, published FROM versions WHERE package_name = ? ORDER BY id DESC" #[name]
+      versions := db-query registry-db "SELECT version, description, readme, author, published, jvm FROM versions WHERE package_name = ? ORDER BY id DESC" #[name]
       latest := head versions
       version-items := versions |> @ render-version-item
       pkg-info := head pkg
@@ -1149,6 +1164,7 @@ fn seed-detail-page ::: Db
         (h3 {} #["Install"])
         (div {class= "seed-install"} #[(raw (name ++ " = \"" ++ latest.version ++ "\""))])
         (p {style= "font-size:.85rem;color:var(--muted)"} #["Add to [seeds] in irij.toml"])
+        (jvm-section name (seed-jvm.coords latest.jvm))
         (readme-section readme-text)
         (div {class= "version-list"} #[
           (h3 {} #["Versions"])
@@ -1162,6 +1178,26 @@ readme-scripts := #[
   (el "script" {src= "https://cdn.jsdelivr.net/npm/dompurify@3.1.6/dist/purify.min.js" integrity= "sha384-+VfUPEb0PdtChMwmBcBmykRMDd+v6D/oFmB3rZM/puCMDYcIvF968OimRh4KQY9a" crossorigin= "anonymous" defer= "defer"} #[])
   (el "script" {src= "/seed-readme.js" defer= "defer"} #[])
 ]
+
+;; The Java libraries the latest version brings (irij.toml [jvm]). A
+;; project that uses the seed loads them — with [trust], only once
+;; `jars` names the seed — so they're shown before anyone installs it.
+fn jvm-section
+  => name coords
+  if (empty? coords)
+    (span {} #[])
+  else
+    (div {class= "seed-jvm"} #[
+      (h3 {} #["Java libraries"])
+      (el "ul" {} (coords |> @ jvm-item))
+      (p {style= "font-size:.85rem;color:var(--muted)"} #[
+        "Fetched from Maven Central with their dependencies. If your irij.toml has [trust], add "
+        (code {} #[("jars = [\"" ++ name ++ "\"]")])
+        " to allow them."])])
+
+fn jvm-item
+  => coord
+  el "li" {} #[(a {href= (seed-jvm.central-url coord) target= "_blank" rel= "noopener"} #[(code {} #[coord])])]
 
 fn readme-section
   => text
@@ -1289,7 +1325,9 @@ fn publish-validate ::: Db FileIO Serve JVM
     if ((bad-link? links.website) || (bad-link? links.repo) || (bad-link? links.docs))
       serve.json-response (json-encode ({error= "website/repo/docs must be http(s):// URLs"}))
     else
-      publish-check-owner request caller name version description license links
+      match (seed-jvm.stored-jvm (get "jvm" meta))
+        Err msg => serve.json-response (json-encode ({error= msg}))
+        Ok jvm => publish-check-owner request caller name version description license (assoc links "jvm" jvm)
 
 fn publish-check-owner ::: Db FileIO Serve JVM
   => request caller name version description license links
@@ -1333,12 +1371,13 @@ fn lookup-version ::: Db
     db-query registry-db "SELECT id FROM versions WHERE package_name = ? AND version = ?" #[name version]
 
 ;; Links are latest-publish-wins, same as license: irij.toml is the
-;; source of truth, so removing a link there removes it here.
+;; source of truth, so removing a link there removes it here. `links`
+;; also carries the version's `jvm` (seed-jvm.stored-jvm).
 fn publish-write-rows ::: Db FileIO Serve
   => name version author description license caller-id links readme
   with db.default-db
     db-exec registry-db "INSERT INTO packages (name, owner_id, license, website, repo, docs, updated) VALUES (?, ?, ?, ?, ?, ?, datetime('now')) ON CONFLICT(name) DO UPDATE SET license = excluded.license, website = excluded.website, repo = excluded.repo, docs = excluded.docs, updated = datetime('now')" #[name caller-id license links.website links.repo links.docs]
-    db-exec registry-db "INSERT INTO versions (package_name, version, description, readme, author) VALUES (?, ?, ?, ?, ?)" #[name version description readme author]
+    db-exec registry-db "INSERT INTO versions (package_name, version, description, readme, author, jvm) VALUES (?, ?, ?, ?, ?, ?)" #[name version description readme author links.jvm]
     serve.json-response (json-encode ({ok= true name= name version= version}))
 
 ;; GET /api/seeds — list/search seeds
@@ -1398,7 +1437,7 @@ fn handle-seed-detail ::: Db
     if (empty? pkg)
       {status= 404 body= (json-encode ({error= "Seed not found"})) headers= (assoc {} "content-type" "application/json")}
     else
-      versions := db-query registry-db "SELECT id, version, description, readme, author, published FROM versions WHERE package_name = ? ORDER BY id DESC" #[name]
+      versions := db-query registry-db "SELECT id, version, description, readme, author, published, jvm FROM versions WHERE package_name = ? ORDER BY id DESC" #[name]
       serve.json-response (json-encode ({package= (head pkg) versions= versions}))
 
 fn handle-seed-download ::: FileIO

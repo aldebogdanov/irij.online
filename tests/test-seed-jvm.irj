@@ -1,0 +1,46 @@
+use std.test {assert-eq assert-true test summarize}
+use seed-jvm :as sj
+
+refused := Err "jvm must be a list of \"group:artifact:version\" strings"
+
+fn run-valid-coord
+  =>
+  assert-true (sj.valid-coord? "org.neo4j.driver:neo4j-java-driver:5.28.5")
+  assert-eq false (sj.valid-coord? "org.neo4j:5.28.5")
+  assert-eq false (sj.valid-coord? "a:b:c:d")
+  assert-eq false (sj.valid-coord? "a::1")
+  assert-eq false (sj.valid-coord? "a:b:<script>")
+  assert-eq false (sj.valid-coord? "a:b:1 0")
+  assert-eq false (sj.valid-coord? 42)
+
+fn run-stored
+  =>
+  assert-eq (Ok "") (sj.stored-jvm ())
+  assert-eq (Ok "[\"a:b:1.0\",\"c.d:e:2\"]") (sj.stored-jvm #["a:b:1.0" "c.d:e:2"])
+  assert-eq (Ok "[]") (sj.stored-jvm #[])
+
+fn run-refused
+  =>
+  assert-eq refused (sj.stored-jvm #["a:b:1" "x\"><img"])
+  assert-eq refused (sj.stored-jvm "a:b:1")
+  assert-eq refused (sj.stored-jvm #[42])
+
+fn run-coords
+  =>
+  assert-eq #[] (sj.coords "")
+  assert-eq #[] (sj.coords ())
+  assert-eq #["a:b:1.0"] (sj.coords "[\"a:b:1.0\"]")
+
+fn run-central-url
+  =>
+  assert-eq "https://central.sonatype.com/artifact/org.apache.commons/commons-text/1.12.0" (sj.central-url "org.apache.commons:commons-text:1.12.0")
+
+results := #[
+  (test "a coordinate is group:artifact:version" run-valid-coord)
+  (test "jvm stored as JSON; absent → ''"        run-stored)
+  (test "anything else is refused"               run-refused)
+  (test "stored values read back"                run-coords)
+  (test "central-url"                            run-central-url)
+]
+
+summarize results
