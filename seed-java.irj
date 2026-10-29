@@ -1,0 +1,43 @@
+mod seed-java
+
+;; The Java sources a seed ships: the .java files under its java/
+;; directory, which `irij publish` bundles (Irij 0.11.378+). A project
+;; that uses the seed compiles them on its own machine — with [trust],
+;; only once `java = ["<seed>"]` names the seed — so the seed page lists
+;; them before anyone installs it.
+;;
+;; Read from the stored tarball (seed-readme.tarball-names), like the
+;; README and [seeds], so every version is covered whatever CLI
+;; published it. Stored per version as a JSON array of paths, sorted;
+;; NULL means not looked yet, "[]" none.
+
+;; At most this many paths are kept.
+max-sources := 200
+
+;; Characters a source path may hold here (plus "/"); a path with
+;; anything else is left out, so a path is safe to show as text.
+path-chars := to-set (split "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789._-$/" "")
+
+pub fn java-path? :: _ Bool
+  => p
+  if ((type-of p) /= "Str")
+    false
+  else
+    shape := (starts-with? p "java/") && (ends-with? p ".java") && (length p) <= 200
+    ;; "._X.java" is macOS tar's AppleDouble metadata for X.java, not Java.
+    clean := (index-of p "..") < 0 && (index-of p "//") < 0 && (index-of p "/._") < 0
+    shape && clean && (fold (acc c -> acc && (contains? path-chars c)) true (split p ""))
+
+;; The paths to store for a tarball's file names.
+pub fn stored-java :: Vector Str
+  => names
+  kept := sort (names |> /? java-path?)
+  json-encode (take max-sources kept)
+
+;; A stored value back as paths (none for NULL or "").
+pub fn sources :: _ Vector
+  => stored
+  if (stored == () || stored == "")
+    #[]
+  else
+    json-parse stored

@@ -59,6 +59,7 @@ use std.fs {FileIO}
 use seed-readme :as seed-readme
 use seed-jvm :as seed-jvm
 use seed-deps :as seed-deps
+use seed-java :as seed-java
 
 fn init-registry-dirs ::: Console FileIO
   => _
@@ -124,6 +125,8 @@ fn init-registry-db ::: Console Db Random
     add-version-jvm-column-if-missing conn
     ;; A version's [seeds] (JSON array; NULL until read from its tarball).
     add-version-seeds-column-if-missing conn
+    ;; A version's java/ sources (JSON array; NULL until read from its tarball).
+    add-version-java-column-if-missing conn
   println "Registry DB initialized"
 
 ;; SQLite has no "ADD COLUMN IF NOT EXISTS"; probe via PRAGMA and
@@ -171,6 +174,17 @@ fn add-version-seeds-column-if-missing ::: Db Console
     ()
   else
     db-exec conn "ALTER TABLE versions ADD COLUMN seeds TEXT" #[]
+
+;; versions.java — the java/ sources a seed version ships (seed-java.irj).
+;; No default: NULL marks versions backfill-java has yet to read.
+fn add-version-java-column-if-missing ::: Db Console
+  => conn
+  cols := db-query conn "PRAGMA table_info(versions)" #[]
+  has-col? := list.fold (acc c -> acc || (c.name == "java")) false cols
+  if has-col?
+    ()
+  else
+    db-exec conn "ALTER TABLE versions ADD COLUMN java TEXT" #[]
 
 ;; Insert every reserved username with NULL pw_hash. INSERT OR
 ;; IGNORE deduplicates so subsequent boots are no-ops. Done via
@@ -253,6 +267,7 @@ fn open-registry-db ::: Db Console Random JVM
   init-registry-db conn
   backfill-readmes conn
   backfill-seeds conn
+  backfill-java conn
   conn
 
 fn tarball-path :: Str Str Str
@@ -302,6 +317,21 @@ fn backfill-seeds ::: Db Console JVM
     ()
   else
     println ("Read [seeds] of " ++ to-str (length rows) ++ " seed version(s)")
+
+;; A stored version's java/ sources, as stored (seed-java.stored-java).
+fn stored-java :: Str Str Str ::: JVM
+  (name version -> seed-java.stored-java (seed-readme.tarball-names (tarball-path name version)))
+
+;; Versions published before the registry read java/ carry NULL. Read
+;; each once from its stored tarball; "[]" when it has none.
+fn backfill-java ::: Db Console JVM
+  => conn
+  rows := db-query conn "SELECT id, package_name, version FROM versions WHERE java IS NULL" #[]
+  list.fold (_ row -> db-exec conn "UPDATE versions SET java = ? WHERE id = ?" #[(stored-java row.package_name row.version) row.id]) () rows
+  if (empty? rows)
+    ()
+  else
+    println ("Read java/ of " ++ to-str (length rows) ++ " seed version(s)")
 
 registry-db :! ()
 if (run-mode == "site")
@@ -654,7 +684,7 @@ fn home-install
 ;; ── Feature cards ────────────────────────────────────────────────
 
 fn home-features
-  (-> div (cls "feature-grid") #[(card "Algebraic Effects" "First-class effect system with deep handlers. Mock any side effect in tests — println, read-line, the clock and the dice included, since the builtins perform Console, Time and Random. State-machine bytecode lowering for hot perform-loops.") (card "Parametric Effect Rows" "Higher-order fns declare row variables: fold :: (Fn):eff _ _ _ ::: eff. The callback's effect row binds eff and propagates into the caller's row at each call site. Compile-time enforcement, no runtime erasure.") (card "Runtime Specs" "Malli-inspired specs replace types. Certify values at construction, validate at boundaries. Spec-annotated pub fns are mandatory; lint enforces it.") (card "Contracts" "Pre/post conditions on functions, in/out contracts at module boundaries. Blame tracking — pre-failure accuses the caller, post-failure accuses the implementation.") (card "Structured Concurrency" "scope/fork/await, par, race, timeout. Java virtual threads with auto-cancellation. Spawned fibers inherit effect row + session namespace.") (card "Child Processes" "std.proc runs a command to completion (stdin, timeout, both streams) or starts one and talks to it a line at a time. It is an effect like any other, so a test drives a whole pipeline of git, compilers and CLIs through a scripted handler.") (card "Terminal UI" "std.term gives raw mode, decoded key/mouse/resize events and wcwidth as an effect — so a mock handler makes a whole TUI assertable as a string, with no tty. The uzor seed builds cell buffers, layout, widgets and an app loop on top.") (card "Pipeline Operators" "|> pipeline, @ map, /? filter, /+ fold. >> composition, ~ apply-to-rest.") (card "Module System & Packages" "use mod.name :as alias, then alias.name — for specs, variants and effects too (:: m.Mode, ::: m.Tick); { selective } for a few constant names. Each file reaches only what it imports. Git deps via irij.toml. Pub/private exports. Effect-gated APIs.") (card "Bytecode-only Execution" "irij build emits a self-contained JAR. State-machine handler lowering is the single execution path — no interpreter, no threaded fallback, no ambiguity.") (card "Hot Redef + Java Interop" "REPL-driven fn redefinition via invokedynamic + MutableCallSite. Java classes via Class/member, objects via obj#member and method references (@ #toUpperCase); every Java site needs ::: JVM, checked at compile time — or sits behind a cap that performs a named effect (::: Db, not ::: JVM), and irij.toml [trust] confines Java to the modules it lists (irij audit).") (card "Java Libraries" "List any Maven library in irij.toml [jvm] at an exact version: it's fetched with its dependencies, pinned by sha256 in irij.lock, reached through a cap like the JDK, and shipped inside the irij build JAR. Databases too — std.jdbc speaks to SQLite, PostgreSQL, H2… through the driver you list. Seeds bring libraries only where [trust] jars allows.") (card "Model-Based Testing" "A model declaration binds a Quint specification to the code implementing it — one clause per action, with the spec's nondet picks bound by name. Quint generates traces, Irij replays them and fails at the first diverging step; Apalache proves invariants. Generating needs the quint binary, replaying a committed trace needs nothing, because the CLI is reached through an effect.")])
+  (-> div (cls "feature-grid") #[(card "Algebraic Effects" "First-class effect system with deep handlers. Mock any side effect in tests — println, read-line, the clock and the dice included, since the builtins perform Console, Time and Random. State-machine bytecode lowering for hot perform-loops.") (card "Parametric Effect Rows" "Higher-order fns declare row variables: fold :: (Fn):eff _ _ _ ::: eff. The callback's effect row binds eff and propagates into the caller's row at each call site. Compile-time enforcement, no runtime erasure.") (card "Runtime Specs" "Malli-inspired specs replace types. Certify values at construction, validate at boundaries. Spec-annotated pub fns are mandatory; lint enforces it.") (card "Contracts" "Pre/post conditions on functions, in/out contracts at module boundaries. Blame tracking — pre-failure accuses the caller, post-failure accuses the implementation.") (card "Structured Concurrency" "scope/fork/await, par, race, timeout. Java virtual threads with auto-cancellation. Spawned fibers inherit effect row + session namespace.") (card "Child Processes" "std.proc runs a command to completion (stdin, timeout, both streams) or starts one and talks to it a line at a time. It is an effect like any other, so a test drives a whole pipeline of git, compilers and CLIs through a scripted handler.") (card "Terminal UI" "std.term gives raw mode, decoded key/mouse/resize events and wcwidth as an effect — so a mock handler makes a whole TUI assertable as a string, with no tty. The uzor seed builds cell buffers, layout, widgets and an app loop on top.") (card "Pipeline Operators" "|> pipeline, @ map, /? filter, /+ fold. >> composition, ~ apply-to-rest.") (card "Module System & Packages" "use mod.name :as alias, then alias.name — for specs, variants and effects too (:: m.Mode, ::: m.Tick); { selective } for a few constant names. Each file reaches only what it imports. Git deps via irij.toml. Pub/private exports. Effect-gated APIs.") (card "Bytecode-only Execution" "irij build emits a self-contained JAR. State-machine handler lowering is the single execution path — no interpreter, no threaded fallback, no ambiguity.") (card "Hot Redef + Java Interop" "REPL-driven fn redefinition via invokedynamic + MutableCallSite. Java classes via Class/member, objects via obj#member and method references (@ #toUpperCase); every Java site needs ::: JVM, checked at compile time — or sits behind a cap that performs a named effect (::: Db, not ::: JVM), and irij.toml [trust] confines Java to the modules it lists (irij audit).") (card "Java Libraries" "List any Maven library in irij.toml [jvm] at an exact version: it's fetched with its dependencies, pinned by sha256 in irij.lock, reached through a cap like the JDK, and shipped inside the irij build JAR. Databases too — std.jdbc speaks to SQLite, PostgreSQL, H2… through the driver you list. Seeds bring libraries only where [trust] jars allows. Your own Java goes in java/ beside irij.toml — the adapter for an object API, compiled and shipped with the app.") (card "Model-Based Testing" "A model declaration binds a Quint specification to the code implementing it — one clause per action, with the spec's nondet picks bound by name. Quint generates traces, Irij replays them and fails at the first diverging step; Apalache proves invariants. Generating needs the quint binary, replaying a committed trace needs nothing, because the CLI is reached through an effect.")])
 
 ;; ── Code examples ────────────────────────────────────────────────
 
@@ -871,6 +901,8 @@ fn home-roadmap
                          phase-row "done" "v0.10.365" "Effect rows you can trust: a `with` needs its handler's row, so a pure function can't print, read the clock or reach Java through a handler; a call through a Java `cap` performs the cap's effect, so code that opens a database declares `::: Db`, not `JVM`; irij.toml `[trust]` confines Java to the modules it lists, `irij audit` shows every site; `unsafe-jvm` is deprecated" ++
                          phase-row "done" "v0.10.368" "Specs check what they say: a name nothing declares is a compile error, not a spec that accepts everything; a variant's fields are checked where it is built (`Circle \"x\"` for `Circle Float` is refused); applied parametric specs (`(Maybe Int)`) and variant names (`Nickel`, `(Just Int)`) as specs; builtin `Result a e` — `Ok a` or `Err e`, what `try` returns" ++
                          phase-row "done" "v0.11.373" "Java libraries: irij.toml `[jvm]` names Maven coordinates, fetched with their dependencies and pinned by hash in `irij.lock`, shipped inside `irij build`'s JAR; seeds bring libraries only where `[trust] jars` allows; `irij deps`. `std.db` is now `std.jdbc` — any JDBC database, the driver a `[jvm]` library — and `irij.jar` drops from 18 MB to 8 MB" ++
+                         phase-row "done" "v0.11.376" "Shipping needs a policy: `irij build` and `irij publish` refuse a project without an irij.toml `[trust]` section (an empty one means no Java outside std); `irij run` warns when a seed reaches Java without it; `irij audit --fix` writes the smallest `[trust]` the program needs, and `irij audit` in a seed covers every module" ++
+                         phase-row "done" "v0.11.378" "Your own Java: `.java` sources in `java/` beside irij.toml compile against the JDK and your `[jvm]` libraries, so a cap can wrap an object API (a driver, a client) in static methods and its handler performs its own effect, not `JVM`; seeds ship `java/` too, compiled on the consumer's machine only where `[trust] java` allows" ++
                          phase-row "planned" "Future" "Linear types (capability + channel safety); channels (send/recv/select); choreographic programming; refinement types; content-addressed code; multi-resume effects (search/nondet/probabilistic); GraalVM native image"))
 
 ;; ── Full home page ───────────────────────────────────────────────
@@ -1179,7 +1211,7 @@ fn seed-detail-page ::: Db
     if (empty? pkg)
       serve.html ~ layout "Not Found" "/seeds" #[(h2 {} #["Seed Not Found"]) (p {} #[("No seed named '" ++ name ++ "' exists.")])]
     else
-      versions := db-query registry-db "SELECT version, description, readme, author, published, jvm, seeds FROM versions WHERE package_name = ? ORDER BY id DESC" #[name]
+      versions := db-query registry-db "SELECT version, description, readme, author, published, jvm, seeds, java FROM versions WHERE package_name = ? ORDER BY id DESC" #[name]
       latest := head versions
       version-items := versions |> @ render-version-item
       pkg-info := head pkg
@@ -1198,6 +1230,7 @@ fn seed-detail-page ::: Db
         (p {style= "font-size:.85rem;color:var(--muted)"} #["Add to [seeds] in irij.toml"])
         (seeds-section (seed-deps.deps latest.seeds))
         (jvm-section name (seed-jvm.coords latest.jvm))
+        (java-section name (seed-java.sources latest.java))
         (readme-section readme-text)
         (div {class= "version-list"} #[
           (h3 {} #["Versions"])
@@ -1248,6 +1281,23 @@ fn jvm-section
       (p {style= "font-size:.85rem;color:var(--muted)"} #[
         "Fetched from Maven Central with their dependencies. If your irij.toml has [trust], add "
         (code {} #[("jars = [\"" ++ name ++ "\"]")])
+        " to allow them."])])
+
+;; The Java sources the latest version ships in java/. A project that
+;; uses the seed compiles them on its own machine — with [trust], only
+;; once `java` names the seed — so they're listed before anyone installs
+;; it. Paths only: seed-java keeps plain characters, shown as text.
+fn java-section
+  => name paths
+  if (empty? paths)
+    (span {} #[])
+  else
+    (div {class= "seed-jvm"} #[
+      (h3 {} #["Java sources"])
+      (el "ul" {} (paths |> @ (path -> el "li" {} #[(code {} #[path])])))
+      (p {style= "font-size:.85rem;color:var(--muted)"} #[
+        "Compiled on your machine when you use this seed. If your irij.toml has [trust], add "
+        (code {} #[("java = [\"" ++ name ++ "\"]")])
         " to allow them."])])
 
 fn jvm-item
@@ -1418,7 +1468,7 @@ fn do-publish ::: FileIO Serve Db JVM
     serve.json-response (json-encode ({error= (name ++ " " ++ version ++ " already published")}))
   else
     readme := stored-readme name version
-    publish-write-rows name version author description license caller-id (assoc links "seeds" (stored-seeds name version)) readme
+    publish-write-rows name version author description license caller-id (assoc (assoc links "seeds" (stored-seeds name version)) "java" (stored-java name version)) readme
 
 fn lookup-version ::: Db
   => name version
@@ -1427,13 +1477,13 @@ fn lookup-version ::: Db
 
 ;; Links are latest-publish-wins, same as license: irij.toml is the
 ;; source of truth, so removing a link there removes it here. `links`
-;; also carries the version's `jvm` (seed-jvm.stored-jvm) and `seeds`
-;; (seed-deps.stored-seeds).
+;; also carries the version's `jvm` (seed-jvm.stored-jvm), `seeds`
+;; (seed-deps.stored-seeds) and `java` (seed-java.stored-java).
 fn publish-write-rows ::: Db FileIO Serve
   => name version author description license caller-id links readme
   with db.default-db
     db-exec registry-db "INSERT INTO packages (name, owner_id, license, website, repo, docs, updated) VALUES (?, ?, ?, ?, ?, ?, datetime('now')) ON CONFLICT(name) DO UPDATE SET license = excluded.license, website = excluded.website, repo = excluded.repo, docs = excluded.docs, updated = datetime('now')" #[name caller-id license links.website links.repo links.docs]
-    db-exec registry-db "INSERT INTO versions (package_name, version, description, readme, author, jvm, seeds) VALUES (?, ?, ?, ?, ?, ?, ?)" #[name version description readme author links.jvm links.seeds]
+    db-exec registry-db "INSERT INTO versions (package_name, version, description, readme, author, jvm, seeds, java) VALUES (?, ?, ?, ?, ?, ?, ?, ?)" #[name version description readme author links.jvm links.seeds links.java]
     serve.json-response (json-encode ({ok= true name= name version= version}))
 
 ;; GET /api/seeds — list/search seeds
@@ -1493,7 +1543,7 @@ fn handle-seed-detail ::: Db
     if (empty? pkg)
       {status= 404 body= (json-encode ({error= "Seed not found"})) headers= (assoc {} "content-type" "application/json")}
     else
-      versions := db-query registry-db "SELECT id, version, description, readme, author, published, jvm, seeds FROM versions WHERE package_name = ? ORDER BY id DESC" #[name]
+      versions := db-query registry-db "SELECT id, version, description, readme, author, published, jvm, seeds, java FROM versions WHERE package_name = ? ORDER BY id DESC" #[name]
       serve.json-response (json-encode ({package= (head pkg) versions= versions}))
 
 fn handle-seed-download ::: FileIO

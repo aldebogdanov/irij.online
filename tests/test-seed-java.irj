@@ -1,0 +1,32 @@
+use std.test {assert-eq assert-true test summarize}
+use seed-java :as sj
+
+fn run-paths
+  =>
+  assert-true (sj.java-path? "java/neo4irij/Bolt.java")
+  assert-true (sj.java-path? "java/a/b/C$D.java")
+  assert-eq false (sj.java-path? "src/Bolt.java")
+  assert-eq false (sj.java-path? "java/../x.java")
+  assert-eq false (sj.java-path? "java/a/<b>.java")
+  assert-eq false (sj.java-path? "java/README.md")
+  assert-eq false (sj.java-path? "java/a/._B.java")
+  assert-eq false (sj.java-path? 42)
+
+fn run-stored
+  =>
+  assert-eq "[\"java/a/A.java\",\"java/b/B.java\"]" (sj.stored-java #["irij.toml" "java/b/B.java" "core.irj" "java/a/A.java"])
+  assert-eq "[]" (sj.stored-java #["irij.toml"])
+
+fn run-sources
+  =>
+  assert-eq #[] (sj.sources ())
+  assert-eq #[] (sj.sources "")
+  assert-eq #["java/a/A.java"] (sj.sources "[\"java/a/A.java\"]")
+
+results := #[
+  (test "a source path is java/**/*.java, plain" run-paths)
+  (test "stored sorted, other files left out"      run-stored)
+  (test "stored values read back"                  run-sources)
+]
+
+summarize results
