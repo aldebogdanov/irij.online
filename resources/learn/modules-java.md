@@ -172,6 +172,8 @@ jvm = ["legacy.zip"]    # may write Class/member and #method by hand
 
 With it, the compiler refuses Java in any other module — the seeds you depend on included — and `irij audit` lists every place the program touches Java. A dependency that says it only needs `Clock` then can't reach the network either.
 
+While you write and run code the section is optional, but `irij build` and `irij publish` refuse a project without it: what you ship should say who may reach Java. You don't have to work it out by hand — `irij audit --fix` writes the smallest `[trust]` your program needs, for you to read and commit. An empty `[trust]` is a complete answer too: no Java outside the standard library.
+
 ## Libraries from Maven
 
 The JDK is where Java starts, not where it ends. Name any library from Maven Central in `irij.toml`, at an exact version:
@@ -184,6 +186,27 @@ The JDK is where Java starts, not where it ends. Name any library from Maven Cen
 `irij run` fetches it with everything it depends on and writes `irij.lock`, which pins each jar by its hash — commit it, and every machine runs the same bytes. From then on its classes are as reachable as the JDK's: `cap escapes :: Markup = "org.apache.commons.text.StringEscapeUtils"`, and `irij build` puts the jars inside your app.
 
 Databases work this way. `std.jdbc` is the `Db` effect over JDBC, and the driver is a library you list: `"org.xerial:sqlite-jdbc"` for `db-open "jdbc:sqlite:app.db"`, or PostgreSQL's, MySQL's, H2's. A seed can bring libraries too, and a library runs code the moment it loads — so with a `[trust]` section, only seeds named in `jars = ["…"]` get theirs fetched at all.
+
+## Your own Java
+
+A cap calls static methods, but many Java APIs are objects — a driver, a client, a compiled regex. Write the small adapter yourself, in Java, in a `java/` directory beside `irij.toml`:
+
+```text
+my-app/
+  irij.toml
+  main.irj
+  java/words/Patterns.java
+```
+
+```irij static
+cap patterns :: Regex = "words.Patterns"
+
+handler java-regex :: Regex ::: Regex
+  compile regex => resume (patterns.compile regex)
+  find-all p text => resume (patterns.findAll p text)
+```
+
+`Patterns.compile` returns the Java `Pattern` object and `findAll` takes it back: Irij just holds it. `irij run` compiles `java/` against the JDK and your `[jvm]` libraries, caches the result, and `irij build` ships it. Because the cap performs `Regex`, code that uses it declares `::: Regex`, never `JVM`. A seed can ship `java/` too — and since that code is compiled on your machine, with `[trust]` it needs `java = ["…"]`, like `jars`.
 
 :::exercise title-case Title Case
 Using `std.text` (imported as `text`), write `title-case`, which capitalises the first letter of every word: `title-case "the effect of effects"` is `"The Effect Of Effects"`. Words are separated by single spaces.

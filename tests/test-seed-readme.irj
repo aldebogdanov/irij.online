@@ -81,6 +81,12 @@ fn run-rank :: () ()
   assert-eq 0 (sr.readme-rank "docs/README.md")
   assert-eq 0 (sr.readme-rank "README.txt")
 
+fn run-names ::: proc.Proc JVM
+  =>
+  archive := tarball "names" "mkdir -p java/acme && echo x > java/acme/A.java && echo y > irij.toml" "irij.toml java/acme/A.java"
+  assert-eq #["irij.toml" "java/acme/A.java"] (sr.tarball-names archive)
+  assert-eq #[] (sr.tarball-names (work ++ "/missing.tar.gz"))
+
 fn in-env :: Fn Fn ::: proc.Proc
   (f -> (-> with proc.default-proc do (f ())))
 
@@ -94,6 +100,7 @@ results := #[
   (test "a long README is cut"                  (in-env run-long-readme-is-cut))
   (test "not a tar.gz, or missing → empty"      (in-env run-not-a-tarball))
   (test "readme-rank"                           run-rank)
+  (test "tarball-names lists files, no bodies"  (in-env run-names))
 ]
 
 with proc.default-proc do (sh ("rm -rf '" ++ work ++ "'"))

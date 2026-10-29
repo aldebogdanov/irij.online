@@ -113,6 +113,51 @@ pub fn tarball-readme :: Str Str ::: JVM
 pub fn tarball-toml :: Str Str ::: JVM
   (path -> tarball-entry toml-rank path)
 
+;; The names of the regular files in the .tar.gz at `path` (a leading
+;; "./" dropped), at most max-entries of them; #[] when it isn't a
+;; readable tar.gz. No body is read.
+pub fn tarball-names :: Str Vector ::: JVM
+  => path
+  outcome := try (-> open-and-list path)
+  match outcome
+    Ok names => names
+    Err _ => #[]
+
+fn open-and-list :: Str Vector ::: JVM
+  => path
+  file := java.io.FileInputStream/new path
+  outcome := try (-> gunzip-list file)
+  file#close ()
+  match outcome
+    Ok names => names
+    Err e => error e
+
+fn gunzip-list :: _ Vector ::: JVM
+  => file
+  gz := java.util.zip.GZIPInputStream/new file
+  outcome := try (-> list-names gz 0 #[])
+  gz#close ()
+  match outcome
+    Ok names => names
+    Err e => error e
+
+fn list-names :: _ Int Vector Vector ::: JVM
+  => gz n acc
+  header-bytes := gz#readNBytes 512
+  if (n >= max-entries || length header-bytes < 512)
+    acc
+  else
+    header := java.lang.String/new header-bytes "ISO-8859-1"
+    name := field header 0 100
+    size := octal (field header 124 12)
+    kind := substring header 156 157
+    regular := kind == "0" || kind == (from-char-code 0)
+    if (name == "" || size < 0)
+      acc
+    else
+      gz#skipNBytes (padded size)
+      list-names gz (n + 1) (if regular (conj acc (root-name name)) else acc)
+
 fn tarball-entry :: _ Str Str ::: JVM
   => rank-of path
   outcome := try (-> open-and-walk rank-of path)
